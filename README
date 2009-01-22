@@ -1,0 +1,10 @@
+# 2009 - Claudio Baccigalupo
+
+# 09.01.22 First experiment with scraping MySpace to look for the closest
+#          friend of a specific profile. Current limitations:
+#          - No support for profile names, both because of Unicode and because
+#            requires reading viewProfile page, more than viewFriends
+#          - No complete check about friends being MySpace artists or not
+#          - Limited friends of friends to those with <=1,000 friends
+#          - cache/ directory should exist in the folder
+#          - No multithread, slow process since one URL is loaded at the time
