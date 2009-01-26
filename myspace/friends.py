@@ -9,211 +9,72 @@ import logging
 from Queue import Queue
 import threading
 import time
-import operator
 
 from urltry import *
 from myspace import *
 from cache import *
+from threads import *
+from utils import *
 
 # ###########################
 # Cache-related functions
 # ###########################
 
 def store_friends(profileID, data):
-    '''Store friends of profileID into local cache.'''
+    '''Store friends of profileID into cache.'''
     return to_cache('cache/%d.txt' % profileID, data)
 
 def load_friends(profileID):
-    '''Returns friends of profileID from local cache, False if not cached.'''
+    '''Returns friends of profileID from cache, False if not cached.'''
     return from_cache('cache/%d.txt' % profileID)
 
-def store_artist(profileID):
-    '''Store data of profileID into local cache.'''
+def store_artist(profileID, data):
+    '''Store data of profileID into cache.'''
     return to_cache('cache/m%d.txt' % profileID, data)
 
 def load_artist(profileID):
-    '''Returns data of profileID from local cache, False if not cached.'''
+    '''Returns data of profileID from cache, False if not cached.'''
     return from_cache('cache/m%d.txt' % profileID)
 
-# ###########################
-# Auxiliary functions
-# ###########################
+def store_closest(profileID, data):
+    '''Store closest friends of profileID into cache.'''
+    return to_cache('cache/c%d.txt' % profileID, data)
 
-def intersect(a, b):
-    '''Return the intersection of two lists'''
-    return list(set(a) & set(b))
+def load_closest(profileID):
+    '''Returns closest friends of profileID from cache, False if not cached.'''
+    return from_cache('cache/c%d.txt' % profileID)
 
-def is_digit(char): 
-    '''Return true if char is a digit.'''
-    return ord(char) in range(ord('0'),ord('9')+1)
-
-def flatten(l):
-    l = filter(None, l)
-    # TEST THIS: return reduce(operator.add, l) if len(l) > 0 else l
-    if len(l) > 0:
-        l = reduce(operator.add, l)
-    return l
 
 # ###########################
-# Thread-related functions
+# Friends-related functions
 # ###########################
 
-class FunctionThreader(threading.Thread):
-    def __init__(self, function, parameter):
-        threading.Thread.__init__(self) # init from parent
-        self.function = function
-        self.parameter = parameter
-        self.result = None
- 
-    def get_result(self):
-        return self.result
- 
-    def run(self):
-        self.result = eval(self.function)(self.parameter)
-     
-def get_friends_list(artistID, pages):
-    def producer(q, files):
-        for URL in URLs:
-            thread = FunctionThreader("parse_page", URL)
-            thread.start()
-            q.put(thread, True)
+def get_friends_pages(profileID, count_pages):
+    URLs = [get_friends_URL(profileID, page) for page in range(1, count_pages)]
+    friends_list = call_threaded(parse_friends, URLs, 20)
+    return flatten(friends_list)
 
-    finished = []
-    def consumer(q, total_URLs):
-        while len(finished) < total_URLs:
-            thread = q.get(True)
-            thread.join()
-            # Remove this [0], instead swap "parse_page" with the right
-            # "parse_friends" (although as is, it does not work)
-            finished.append(thread.get_result()[0])
-
-    q = Queue(5)
-    URLs = [get_friends_page_URL(artistID, page) for page in range(1, pages)]
-    prod_thread = threading.Thread(target=producer, args=(q, URLs))
-    cons_thread = threading.Thread(target=consumer, args=(q, len(URLs)))
-    prod_thread.start()
-    cons_thread.start()
-    prod_thread.join()
-    cons_thread.join()
-    return flatten(finished)
- 
-## From here on, change with the previous class
- 
-class FileGetter(threading.Thread):
-    def __init__(self, url):
-        threading.Thread.__init__(self) # init from parent
-        self.url = url
-        self.result = None
- 
-    def get_result(self):
-        return self.result
- 
-    def run(self):
-        self.result = parse_page(self.url)[0]
-
-class FriendGetter(threading.Thread):
-    def __init__(self, artistID):
-        threading.Thread.__init__(self)
-        self.artistID = artistID
-        self.result = None
-
-    def get_result(self):
-        return self.result
-
-    def run(self):
-        self.result = get_friends(self.artistID)
- 
-def get_files(artistID, pages):
-    def producer(q, files):
-        # print "Producing"
-        for file in files:
-            # print "Scraping URL: %s" % file
-            thread = FileGetter(file)
-            thread.start()
-            q.put(thread, True)
- 
-    finished = []
-    def consumer(q, total_files):
-        while len(finished) < total_files:
-            thread = q.get(True)
-            thread.join()
-            # print "(read page " + str(len(finished)) + ") "
-            finished.append(thread.get_result())
- 
-    q = Queue(5)
-    files = [get_friends_page_URL(artistID, page) for page in range(1,pages)]
-    prod_thread = threading.Thread(target=producer, args=(q, files))
-    cons_thread = threading.Thread(target=consumer, args=(q, len(files)))
-    prod_thread.start()
-    cons_thread.start()
-    prod_thread.join()
-    cons_thread.join()
-    friends = flatten(finished)
-    # print "Artist %d has %d friends" % (artistID, len(friends))
-    return friends
-
-def get_friends_files(artistIDs):
-    def producer(q, artistIDs):
-        for artistID in artistIDs:
-            thread = FriendGetter(artistID)
-            thread.start()
-            q.put(thread, True)
-
-    finished = []
-    def consumer(q, total_artists):
-        missing = total_artists - len(finished)
-        while missing > 0:
-            thread = q.get(True)
-            thread.join()
-            finished.append(thread.get_result())
-            if missing % 25 == 0:
-                logging.info("[%d more friends to load]" % missing)
-            missing = total_artists - len(finished)
-            
-    q = Queue(20)
-    prod_thread = threading.Thread(target=producer, args=(q, artistIDs))
-    cons_thread = threading.Thread(target=consumer, args=(q, len(artistIDs)))
-    prod_thread.start()
-    cons_thread.start()
-    prod_thread.join()
-    cons_thread.join()
-    return finished
-
-
-def get_friends_page_URL(artistID, page=0):
-    return viewFriendsURL + "%d&p=1&j=%d" % (artistID, page)
-
-def get_other_pages(artistID, pages):
-    #return get_files(artistID, pages)
-    return get_friends_list(artistID, pages)
-    
-def get_ffriends(artistIDs):
-    return get_friends_files(artistIDs)
-
-def parse_page(url):
-    '''Return first friends, page count, is musician'''
+def parse_friends(url, complete=False):
+#    parse_page(url)[0]
+    '''Return list of friends and, if complete, page count and is musician.'''
     resp = get_page(url)
+    friends = count = is_musician = None
     if resp is None:
         logging.debug("URL error on: %s" % url)
-        return [None, None, None]
-    # Parse list of friends
-    friendPattern = r'<a href="http://profile\.myspace\.com/index\.cfm\?fuseaction=user\.viewProfile&friendID=(.*?)" class="msProfileTextLink"'
-    friends = map(int, re.findall(friendPattern, resp))
-    # Parse page count
-    pagesPattern = '&raquo;</a>.*?<a .*? class="pagingLink">(.*?)</a> </span><span class="nav_right">'
-    try:
-        count = int(filter(is_digit, re.search(pagesPattern, resp).group(1)))
-    except:
-        count = 1
-    # Parse is musician or simple profile
-    is_musician = resp.find("MySpace.Ads.Account = {\"Type\":\"7\"") > 0
-    return [friends, count, is_musician]
-    
+    else:
+        friends = parse_friends_list(resp)
+        if complete:
+            count = parse_friends_page_count(resp)
+            is_musician = parse_friends_is_musician(resp)
+    return [friends, count, is_musician] if complete else friends
 
-# Not working within FunctionThreader
-def parse_friends(url):
-    parse_page(url)[0]
 
+# ###########################
+# Friends-related functions
+# ###########################
+
+def get_friends_friends(profileIDs):
+    return call_threaded(get_friends, profileIDs, 5)
 
 def get_friends(seed=284314184, maxPages=30, isSeed=False):
     '''Return friends of profileID with no more than maxPages friend pages.'''
@@ -226,15 +87,14 @@ def get_friends(seed=284314184, maxPages=30, isSeed=False):
             (len(friends) if friends is not None else 0, seed))
         return friends
 
-    logging.debug("Loading friends of %d from web" % seed)
     friends = []
-    friends, pages, is_musician = parse_page(get_friends_page_URL(seed))
+    friends, pages, is_musician = parse_friends(get_friends_URL(seed), True)
     if pages is None:
         logging.debug("Error retrieving friends of %d" % seed)
         friends = None
     if pages > maxPages and maxPages is not None and not isSeed:
         # print "Profile %d has too many pages (%d)" % (seed, pages)
-        logging.debug("Skipped friends of %d (too many)" % seed)
+        logging.debug("Skipped friends of %d (%d pages)" % (seed, pages))
         friends = None
     # Break if profile does not belong to an artist
     elif not is_musician:
@@ -243,7 +103,7 @@ def get_friends(seed=284314184, maxPages=30, isSeed=False):
         friends = None
     else:
         # print "Artist %d has %d pages" % (seed, pages)
-        friends.extend(get_other_pages(seed, pages))
+        friends.extend(get_friends_pages(seed, pages))
         # print "Artist %d has %d total friends" % (seed, len(friends))
         logging.debug("Loaded %d friends of %d (web)" % (len(friends), seed))
  
@@ -256,7 +116,13 @@ def get_friends(seed=284314184, maxPages=30, isSeed=False):
 # Main function
 # ###########################
 
-def get_closest(currentID):    
+def get_closest(currentID):
+
+    # Return from cache if exists
+    closest = load_closest(currentID)
+    if closest is not False:
+        return closest
+     
     size = 20
 
     friends = get_friends(currentID, isSeed=True)
@@ -264,23 +130,29 @@ def get_closest(currentID):
         print "Seed profile has no friends"
         return
     logging.debug("Parsed %d friends of %d" % (len(friends), currentID))    
-    ffriends = get_ffriends(friends)
+    ffriends = get_friends_friends(friends)
     logging.debug("Retrieved %d friends of %d" % (len(friends), currentID))
 
-    found = shared = rank = [None] * len(friends)
+    closest = [None] * len(friends)
     for f, friendID in enumerate(friends):
         if ffriends[f] is None:
-            found[f] = shared[f] = 0
+            found = shared = 0
         else:
-            found[f] = len(ffriends[f])
-            shared[f] = len(intersect(ffriends[f], friends))
+            found = len(ffriends[f])
+            shared = len(intersect(ffriends[f], friends))
+        closest[f] = [friendID, found, shared]
 
+    # Store closest to local cache
+    store_closest(currentID, closest)
+    return closest
+
+def print_closest(seed):
+    rank = [None] * len(friends)
     rank = [[shared[f]*1.0/found[f] if found[f] > 0 else 0, friendID] 
         for f, friendID in enumerate(friends)]
     rank.sort()
     rank.reverse()
     print "Top %d friends of %d: %s" % (size, currentID, [i[1] for i in rank[:size] if i[0] > 0 ])
-
 
 
 def usage():
