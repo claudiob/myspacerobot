@@ -2,50 +2,18 @@
 
 # 2009 - Claudio Baccigalupo
 
-import urllib
-import re
+import sys
+import getopt
+import os
 import logging
-import pickle
+from Queue import Queue
+import threading
+import time
+import operator
 
-logging.basicConfig()
-log = logging.getLogger("MySpace")
-log.setLevel(logging.INFO)
-
-viewFriendsURL = "http://friends.myspace.com/index.cfm?fuseaction=user.viewfriends&friendID=%d"
-
-# ###########################
-# HTTP-related functions
-# ###########################
-
-def get_response(url):
-    '''Return HTML code for url.'''
-    log.debug("Opening URL: %s" % url)
-    while True:
-        try:
-            return urllib.urlopen(url).read()
-        except IOError:
-            log.warn("Opening URL failed - trying again: %s" % url)
-
-def parse_artist(resp):
-    '''Parse viewFriends code and return whether belongs to an artist.'''
-    return resp.find("MySpace.Ads.Account = {\"Type\":\"7\"") > 0
-
-def parse_friends(resp):
-    '''Parse viewFriends code and return list of friends ID.'''
-    friendPattern = r'<a href="http://profile\.myspace\.com/index\.cfm\?fuseaction=user\.viewProfile&friendID=(.*?)" class="msProfileTextLink"'
-    return map(int, re.findall(friendPattern, resp))
-
-def parse_more(resp):
-    '''Parse viewFriends code and return whether a next page is linked.'''
-    return resp.find('class="nextPagingLink"') > 0
-
-def parse_count(resp):
-    '''Parse viewFriends code and return the number of friends.'''
-    try:
-        countPattern = '<option selected="selected" value="all">.*?\\((.*?)\\)</option>'
-        return int(filter(is_digit, re.search(countPattern, resp).group(1)))
-    except:
-        return None
+from urltry import *
+from myspace import *
+from cache import *
 
 # ###########################
 # Cache-related functions
@@ -53,176 +21,363 @@ def parse_count(resp):
 
 def store_friends(profileID, data):
     '''Store friends of profileID into local cache.'''
-    with open('cache/%d.txt' % profileID, 'w') as f:
-        pickle.dump(data, f)
+    return to_cache('cache/%d.txt' % profileID, data)
 
 def load_friends(profileID):
     '''Returns friends of profileID from local cache, False if not cached.'''
-    try:
-        with open('cache/%d.txt' % profileID, 'r') as f:
-            return pickle.load(f)
-    except IOError:
-        return False
+    return from_cache('cache/%d.txt' % profileID)
 
 def store_artist(profileID):
     '''Store data of profileID into local cache.'''
-    with open('cache/m%d.txt' % profileID, 'w') as f:
-        pickle.dump(True, f)
+    return to_cache('cache/m%d.txt' % profileID, data)
 
 def load_artist(profileID):
     '''Returns data of profileID from local cache, False if not cached.'''
-    try:
-        with open('cache/m%d.txt' % profileID, 'r') as f:
-            return pickle.load(f)
-    except IOError:
-        return False
-
+    return from_cache('cache/m%d.txt' % profileID)
 
 # ###########################
 # Auxiliary functions
 # ###########################
 
+def intersect(a, b):
+    '''Return the intersection of two lists'''
+    return list(set(a) & set(b))
+
 def is_digit(char): 
     '''Return true if char is a digit.'''
     return ord(char) in range(ord('0'),ord('9')+1)
 
+def flatten(l):
+    l = filter(None, l)
+    # TEST THIS: return reduce(operator.add, l) if len(l) > 0 else l
+    if len(l) > 0:
+        l = reduce(operator.add, l)
+    return l
+
 # ###########################
-# Main functions
+# Thread-related functions
 # ###########################
 
-def get_friends(profileID,limit=1000,useCache=True):
-    '''Return friends of profileID with no more than limit friends.'''
-    # Return from local file if artist is cached
-    if useCache:
-        friendIDs = load_friends(profileID)
-        if friendIDs is not False:
-            return friendIDs
-    # Return from the Web otherwise
-    friendIDs = []
-    page = 0
-    while True:
-        url = viewFriendsURL % profileID + "&p=1&j=%d" % page
-        resp = get_response(url)
-        # Break if profile does not belong to an artist
-        if not parse_artist(resp):
-            friendIDs = None
-            break
-        # Break if profile has more than limit friends
-        if parse_count(resp) > limit and limit is not None:
-            friendIDs = None
-            break
-        friendIDs.extend(parse_friends(resp))
-        # Break if there are no more friends pages to parse
-        if not parse_more(resp):
-            break
-        page += 1
-        log.info("Scraped %d friends of %s (p.%d)" % (len(friendIDs), profileID, page))
-    # Store from Web to local cache
-    store_friends(profileID, friendIDs)        
-    return friendIDs
+class FunctionThreader(threading.Thread):
+    def __init__(self, function, parameter):
+        threading.Thread.__init__(self) # init from parent
+        self.function = function
+        self.parameter = parameter
+        self.result = None
+ 
+    def get_result(self):
+        return self.result
+ 
+    def run(self):
+        self.result = eval(self.function)(self.parameter)
+     
+def get_friends_list(artistID, pages):
+    def producer(q, files):
+        for URL in URLs:
+            thread = FunctionThreader("parse_page", URL)
+            thread.start()
+            q.put(thread, True)
 
-def is_artist(profileID):
-    '''Return whether profileID belongs to an artist.'''
-    # Return from local file if artist is cached
-    friendIDs = load_friends(profileID)
-    if friendIDs is not False:
-        return friendIDs is not None
-    # Return from musician file if artist is cached
-    if load_artist(profileID) is not False:
-        return True
-    # Return from the Web otherwise
-    url = viewFriendsURL % profileID
-    resp = get_response(url)
-    artist = parse_artist(resp)
-    # If not a musician, store an empty cache file
-    if not artist:
-        store_friends(profileID, None)
-    # If a musician, store in a file
+    finished = []
+    def consumer(q, total_URLs):
+        while len(finished) < total_URLs:
+            thread = q.get(True)
+            thread.join()
+            # Remove this [0], instead swap "parse_page" with the right
+            # "parse_friends" (although as is, it does not work)
+            finished.append(thread.get_result()[0])
+
+    q = Queue(5)
+    URLs = [get_friends_page_URL(artistID, page) for page in range(1, pages)]
+    prod_thread = threading.Thread(target=producer, args=(q, URLs))
+    cons_thread = threading.Thread(target=consumer, args=(q, len(URLs)))
+    prod_thread.start()
+    cons_thread.start()
+    prod_thread.join()
+    cons_thread.join()
+    return flatten(finished)
+ 
+## From here on, change with the previous class
+ 
+class FileGetter(threading.Thread):
+    def __init__(self, url):
+        threading.Thread.__init__(self) # init from parent
+        self.url = url
+        self.result = None
+ 
+    def get_result(self):
+        return self.result
+ 
+    def run(self):
+        self.result = parse_page(self.url)[0]
+
+class FriendGetter(threading.Thread):
+    def __init__(self, artistID):
+        threading.Thread.__init__(self)
+        self.artistID = artistID
+        self.result = None
+
+    def get_result(self):
+        return self.result
+
+    def run(self):
+        self.result = get_friends(self.artistID)
+ 
+def get_files(artistID, pages):
+    def producer(q, files):
+        # print "Producing"
+        for file in files:
+            # print "Scraping URL: %s" % file
+            thread = FileGetter(file)
+            thread.start()
+            q.put(thread, True)
+ 
+    finished = []
+    def consumer(q, total_files):
+        while len(finished) < total_files:
+            thread = q.get(True)
+            thread.join()
+            # print "(read page " + str(len(finished)) + ") "
+            finished.append(thread.get_result())
+ 
+    q = Queue(5)
+    files = [get_friends_page_URL(artistID, page) for page in range(1,pages)]
+    prod_thread = threading.Thread(target=producer, args=(q, files))
+    cons_thread = threading.Thread(target=consumer, args=(q, len(files)))
+    prod_thread.start()
+    cons_thread.start()
+    prod_thread.join()
+    cons_thread.join()
+    friends = flatten(finished)
+    # print "Artist %d has %d friends" % (artistID, len(friends))
+    return friends
+
+def get_friends_files(artistIDs):
+    def producer(q, artistIDs):
+        for artistID in artistIDs:
+            thread = FriendGetter(artistID)
+            thread.start()
+            q.put(thread, True)
+
+    finished = []
+    def consumer(q, total_artists):
+        missing = total_artists - len(finished)
+        while missing > 0:
+            thread = q.get(True)
+            thread.join()
+            finished.append(thread.get_result())
+            if missing % 25 == 0:
+                logging.info("[%d more friends to load]" % missing)
+            missing = total_artists - len(finished)
+            
+    q = Queue(20)
+    prod_thread = threading.Thread(target=producer, args=(q, artistIDs))
+    cons_thread = threading.Thread(target=consumer, args=(q, len(artistIDs)))
+    prod_thread.start()
+    cons_thread.start()
+    prod_thread.join()
+    cons_thread.join()
+    return finished
+
+
+def get_friends_page_URL(artistID, page=0):
+    return viewFriendsURL + "%d&p=1&j=%d" % (artistID, page)
+
+def get_other_pages(artistID, pages):
+    #return get_files(artistID, pages)
+    return get_friends_list(artistID, pages)
+    
+def get_ffriends(artistIDs):
+    return get_friends_files(artistIDs)
+
+def parse_page(url):
+    '''Return first friends, page count, is musician'''
+    resp = get_page(url)
+    if resp is None:
+        logging.debug("URL error on: %s" % url)
+        return [None, None, None]
+    # Parse list of friends
+    friendPattern = r'<a href="http://profile\.myspace\.com/index\.cfm\?fuseaction=user\.viewProfile&friendID=(.*?)" class="msProfileTextLink"'
+    friends = map(int, re.findall(friendPattern, resp))
+    # Parse page count
+    pagesPattern = '&raquo;</a>.*?<a .*? class="pagingLink">(.*?)</a> </span><span class="nav_right">'
+    try:
+        count = int(filter(is_digit, re.search(pagesPattern, resp).group(1)))
+    except:
+        count = 1
+    # Parse is musician or simple profile
+    is_musician = resp.find("MySpace.Ads.Account = {\"Type\":\"7\"") > 0
+    return [friends, count, is_musician]
+    
+
+# Not working within FunctionThreader
+def parse_friends(url):
+    parse_page(url)[0]
+
+
+def get_friends(seed=284314184, maxPages=30, isSeed=False):
+    '''Return friends of profileID with no more than maxPages friend pages.'''
+
+    # Return from cache if exists and (in case of seed) if not None
+    friends = load_friends(seed)
+    if friends is not False and not (isSeed and friends is None):
+        # Check why len(friends) is often 40 when cached
+        logging.debug("Loaded %d friends of %d (cache)" % 
+            (len(friends) if friends is not None else 0, seed))
+        return friends
+
+    logging.debug("Loading friends of %d from web" % seed)
+    friends = []
+    friends, pages, is_musician = parse_page(get_friends_page_URL(seed))
+    if pages is None:
+        logging.debug("Error retrieving friends of %d" % seed)
+        friends = None
+    if pages > maxPages and maxPages is not None and not isSeed:
+        # print "Profile %d has too many pages (%d)" % (seed, pages)
+        logging.debug("Skipped friends of %d (too many)" % seed)
+        friends = None
+    # Break if profile does not belong to an artist
+    elif not is_musician:
+        # print "Profile %d is not a musician" % seed
+        logging.debug("Skipped friends of %d (not musician)" % seed)
+        friends = None
     else:
-        store_artist(profileID)
-    log.debug("Checked if %d is a musician: %s" % (profileID, artist))
-    return artist
+        # print "Artist %d has %d pages" % (seed, pages)
+        friends.extend(get_other_pages(seed, pages))
+        # print "Artist %d has %d total friends" % (seed, len(friends))
+        logging.debug("Loaded %d friends of %d (web)" % (len(friends), seed))
+ 
+    # Store from Web to local cache
+    store_friends(seed, friends)
+    return friends
 
-def get_closest(profileID=418733388, size=5):
-    '''Return the size closest friends of profileID.'''
-    friends = get_friends(profileID,limit=None,useCache=False)
+
+# ###########################
+# Main function
+# ###########################
+
+def get_closest(currentID):    
+    size = 20
+
+    friends = get_friends(currentID, isSeed=True)
     if friends is None:
-        log.warn("%d is not a musician" % (profileID))
+        print "Seed profile has no friends"
         return
-    log.info("%d has %d friends" % (profileID, len(friends)))
-    rank = []
-    # Exploring which friends of friends are friends of profileID
+    logging.debug("Parsed %d friends of %d" % (len(friends), currentID))    
+    ffriends = get_ffriends(friends)
+    logging.debug("Retrieved %d friends of %d" % (len(friends), currentID))
+
+    found = shared = rank = [None] * len(friends)
     for f, friendID in enumerate(friends):
-        fFriendCount = fFriendMutual = 0
-        fFriends = get_friends(friendID)
-        if fFriends is not None:
-            log.info("\t%d/%d) %d has %d friends" % (f+1, len(friends), friendID, len(fFriends)))
-            for fF, fFriendID in enumerate(fFriends):
-                if fFriendID == profileID:
-                    log.info("\t%d/%d)\t%d/%d) %d is seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID))
-                else:    
-                    fFriendCount += 1
-                    if fFriendID in friends:
-                        fFriendMutual += 1
-                        log.info("\t%d/%d)\t%d/%d) %d friend of %d AND seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID, friendID))
-                    else:
-                        log.info("\t%d/%d)\t%d/%d) %d not friend of seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID))
-        if fFriendCount > 0:
-            rank.append([fFriendMutual/float(fFriendCount),friendID,fFriendMutual,fFriendCount])
-        log.info("\t%d/%d) %d has %d friends (%d friends of seed)" % 
-            (f+1, len(friends), friendID, fFriendCount, fFriendMutual))
+        if ffriends[f] is None:
+            found[f] = shared[f] = 0
+        else:
+            found[f] = len(ffriends[f])
+            shared[f] = len(intersect(ffriends[f], friends))
+
+    rank = [[shared[f]*1.0/found[f] if found[f] > 0 else 0, friendID] 
+        for f, friendID in enumerate(friends)]
     rank.sort()
     rank.reverse()
-    topFriends = [i[1] for i in rank[:size] if i[0] > 0]
-    log.info("The top friends of %d are: %s" % (profileID, topFriends))
-    return rank
-     
-# This works but takes much longer
-# def get_closest_artists(profileID=418733388, size=5):
-#     friends = get_friends(profileID,limit=None)
-#     if friends is None:
-#         log.warn("%d is not a musician" % (profileID))
-#         return
-#     log.info("%d has %d friends" % (profileID, len(friends)))
-#     rank = []
-#     # Exploring which friends of friends are friends of profileID
-#     for f, friendID in enumerate(friends):
-#         fFriendCount = fFriendMutual = 0
-#         fFriends = get_friends(friendID)
-#         if fFriends is not None:
-#             log.info("\t%d/%d) %d has %d friends" % (f+1, len(friends), friendID, len(fFriends)))
-#             for fF, fFriendID in enumerate(fFriends):
-#                 if fFriendID == profileID:
-#                     log.info("\t%d/%d)\t%d/%d) %d is seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID))
-#                 else:    
-#                     # If fFriend is a friend of profileID, retrieve artist info
-#                     if fFriendID in friends:
-#                         ffFriends = get_friends(fFriendID)
-#                         if ffFriends is not None:
-#                             fFriendCount += 1
-#                             if profileID in ffFriends:
-#                                 fFriendMutual += 1
-#                                 log.info("\t%d/%d)\t%d/%d) %d friend of %d AND seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID, friendID))
-#                             else:
-#                                 log.info("\t%d/%d)\t%d/%d) %d not friend of seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID))
-# 
-#                     # Else just check whether fFriend is a musician or not
-#                     elif is_artist(fFriendID):
-#                         fFriendCount += 1
-#                         log.info("\t%d/%d)\t%d/%d) %d not friend of seed" % (f+1, len(friends), fF+1, len(fFriends), fFriendID))
-#                     else:
-#                         log.info("\t%d/%d)\t%d/%d) %d not a musician" % (f+1, len(friends), fF+1, len(fFriends), fFriendID))
-#         if fFriendCount > 0:
-#             rank.append([fFriendMutual/float(fFriendCount),friendID])
-#         log.info("\t%d/%d) %d has %d musician friends (%d friends of seed)" % 
-#             (f+1, len(friends), friendID, fFriendCount, fFriendMutual))
-#     rank.sort()
-#     rank.reverse()
-#     topFriends = [i[1] for i in rank[:size] if i[0] > 0]
-#     log.info("The top friends of %d are: %s" % (profileID, topFriends))
-#     return topFriends
+    print "Top %d friends of %d: %s" % (size, currentID, [i[1] for i in rank[:size] if i[0] > 0 ])
 
+
+
+def usage():
+    print ("Usage: friends.py <options>")
+    print ("   options:")
+    print ("   -h [--help]    print this usage statement")
+    print ("   -v [--verbose] more info to standard out")
+    print ("   -a [--artist]  <mySpaceUID> specify the starting artist ID")
+    print ("   -c [--cache]   <cache path> set the path to the cache folder")
+    print ("   -l [--log]     <log file path> set the path to the log file")
+    return
+
+
+# piratas (179485614) 1937 friends
+# go ape (284314184)
+# danger (213036694)
+# 17442338 placebo
+# 115476392 sux
+# 64481548 subsonica
+# 48154667 amaral
+
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    currentID = 284314184 # By default use Go Ape
+    friends = []
+    grabList = []
+    cachePath = os.path.expanduser("cache")
+    flag_verbose = skip = 0
+
+    # Add as parameters maxPages and size
+    
+    loggingConfig = {"format":'%(asctime)s %(levelname)-8s %(message)s',
+                     "datefmt":'%Y/%M/%D %H:%M:%S', "level": logging.INFO}
+
+    try:
+        opts, args = getopt.getopt(argv, "hva:l:c:", 
+            ["help", "verbose", "artist=", "log=", "cache="])
+    except getopt.GetoptError, err:
+        print >> sys.stderr, "Poorly specified options..." + str(err)
+        usage()
+        sys.exit(2)
+    if len(opts) < 1:
+        print ("not enough args specified, try again")
+        usage()
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif opt in ("-l", "--log"):
+            logPath = os.path.expanduser(arg)
+            if not os.path.exists(logPath):
+                try:
+                    os.mkdir(logPath)
+                except:
+                    print "Could not create log directory"
+                    usage()
+                    return 183
+            # Should add a log rotator here
+            loggingConfig ={"format":'%(asctime)s %(levelname)-8s %(message)s',
+                             "datefmt":'%Y/%M/%D %H:%M:%S',
+                             "filename":os.path.join(logPath ,"friends.log"),
+                             "filemode":"w", "level": logging.INFO}        
+        elif opt in ("-v", "--verbose"):
+            flag_verbose = True
+            loggingConfig["level"] = logging.DEBUG
+        elif opt in ("-a", "--artist"):
+            currentID = int(arg)
+        elif opt in ("-c", "--cache"):
+             cachePath = os.path.expanduser(arg)
+        else:
+            print "Poorly specified options..."
+            usage()
+            return 4
+
+    if not os.path.exists(cachePath):
+        try:
+            os.mkdir(cachePath)
+        except:
+            print "Could not create cache directory"
+            usage()
+            return 183
+
+    logging.basicConfig(**loggingConfig)
+    
+    logging.info("Estimating closest artist of %d" % currentID)
+    start = time.time()    
+    get_closest(currentID)
+    logging.info("Elapsed time: %s" % (time.time() - start))
+
+if __name__ == "__main__":
+    sys.exit(main())
 
 # def getRecommendation(seedID, size=5):
 #     pass
-     
+
