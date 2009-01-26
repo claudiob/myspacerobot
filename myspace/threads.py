@@ -12,22 +12,23 @@ import unittest
 # ###########################
 
 class FunctionThreader(threading.Thread):
-    def __init__(self, function, parameter):
+    def __init__(self, function, data, params):
         threading.Thread.__init__(self) # init from parent
         self.function = function
-        self.parameter = parameter
+        self.data = data
+        self.params = params
         self.result = None
  
     def get_result(self):
         return self.result
  
     def run(self):
-        self.result = self.function(self.parameter)
+        self.result = self.function(self.data, **self.params)
 
-def call_threaded(function, data, queueSize=10):
+def call_threaded(function, data, queueSize=10, params={}):
     def producer_get(q, function, data):
         for item in data:
-            thread = FunctionThreader(function, item)
+            thread = FunctionThreader(function, item, params)
             thread.start()
             q.put(thread, True)
 

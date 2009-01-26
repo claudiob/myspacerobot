@@ -8,6 +8,11 @@ import unittest
 
 def to_cache(path, data):
     '''Store data into local file.'''
+    if not os.path.exists(path):
+        try:
+            os.makedirs(os.path.split(path)[0])
+        except:
+            return False
     with open(path, 'w') as f:
         pickle.dump(data, f)
 
