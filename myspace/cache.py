@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # 2009 - Claudio Baccigalupo
+from __future__ import with_statement
 
 import os
 import pickle
