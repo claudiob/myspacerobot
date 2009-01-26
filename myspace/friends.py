@@ -6,7 +6,6 @@ import sys
 import getopt
 import os
 import logging
-from Queue import Queue
 import threading
 import time
 import webbrowser
@@ -49,7 +48,7 @@ def store_cached(profileID, data, cachePath, ext=None):
 # Friends-related functions
 # ###########################
 
-def get_friendIDs(seed=284314184, cachePath=None, maxPages=30, isSeed=False):
+def get_friendIDs(seed, cachePath=None, maxPages=None, isSeed=False):
     '''Return friends of profileID with no more than maxPages friend pages.'''
 
     # Return from cache if exists and (in case of seed) if not None
@@ -83,7 +82,7 @@ def get_friendIDs(seed=284314184, cachePath=None, maxPages=30, isSeed=False):
         store_cached(seed, friends, cachePath)
     return friends
 
-def get_friend_friends(profileID, cachePath=None):
+def get_friend_friends(profileID, maxPages, cachePath=None):
     '''Count the friends of each friend of profileID and the ones in common.'''
     # Return from cache if exists
     if cachePath is not None:
@@ -91,12 +90,12 @@ def get_friend_friends(profileID, cachePath=None):
         if ffriends is not False:
             return ffriends
      
-    friendIDs = get_friendIDs(profileID, cachePath, isSeed=True)
+    friendIDs = get_friendIDs(profileID, cachePath=cachePath, maxPages=maxPages, isSeed=True)
     if friendIDs is None:
         logging.debug("No friends found for %d" % profileID)
         return
     logging.debug("Parsed %d friends of %d" % (len(friendIDs), profileID))
-    params = {"cachePath": cachePath, "isSeed": False} # ADD maxPages    
+    params = {"cachePath": cachePath, "isSeed": False, "maxPages": maxPages}    
     ffriendIDs = call_threaded(get_friendIDs, friendIDs, 5, params)
     logging.debug("Retrieved %d friends of %d" % (len(friendIDs), profileID))
 
@@ -114,14 +113,14 @@ def get_friend_friends(profileID, cachePath=None):
         store_cached(profileID, result, cachePath, "c")
     return result
 
-def are_friends(profileID, friendID, cachePath):
+def are_friends(profileID, friendID, cachePath=None):
     '''Return True if friendID is in the list of friends of profileID.'''
-    friendIDs = get_friendIDs(profileID, cachePath)
+    friendIDs = get_friendIDs(profileID, cachePath=cachePath, maxPages=maxPages)
     return friendID in friendIDs
 
-def get_closest_friends(seed, size, beta, minimum, cachePath=None):
+def get_closest_friends(seed, size, beta, minimum, maxPages, cachePath=None):
     '''Return the friends of seed with most friends in common with seed.'''
-    friends = get_friend_friends(seed, cachePath)
+    friends = get_friend_friends(seed, maxPages, cachePath)
     rank = [None] * len(friends)
     rank = [[f[2]*1.0/pow(f[1], beta) if f[1] >= minimum else 0, f[0]] for f in friends]
     rank.sort()
@@ -133,7 +132,7 @@ def open_closest_friends(profileIDs):
     for profileID in profileIDs:
         webbrowser.open_new_tab(viewProfileURL + str(profileID))
 
-def recommend_friends(profileIDs, cachePath):
+def recommend_friends(profileIDs, cachePath=None):
     for i, profileID in enumerate(profileIDs):
         other_friends = profileIDs[0:i] + profileIDs[i+1:len(profileIDs)]
         for friendID in other_friends:
@@ -153,20 +152,10 @@ def usage():
     print ("   -a [--artist]  <mySpaceUID> specify the starting artist ID")
     print ("   -b [--beta]    <value in [0,1]> specify the popularity bias")
     print ("   -m [--minimum] <integer> specify the minimum number of friends")
+    print ("   -x [--maximum] <integer> specify the maximum number of pages")
     print ("   -c [--cache]   <cache path> set the path to the cache folder")
     print ("   -l [--log]     <log file path> set the path to the log file")
     return
-
-
-# piratas (179485614) 1937 friends
-# go ape (284314184)
-# danger (213036694)
-# 17442338 placebo
-# 115476392 sux
-# 64481548 subsonica
-# 48154667 amaral
-# 155754525 bon iver
-# 395541002 goremix
 
 
 def main(argv=None):
@@ -181,6 +170,7 @@ def main(argv=None):
     size = 5
     minimum = 100
     openbrowser = False
+    maxPages = 30
 
     # Add as parameters maxPages and MIN pages!
     
@@ -188,9 +178,9 @@ def main(argv=None):
                      "datefmt":'%Y/%M/%D %H:%M:%S', "level": logging.INFO}
 
     try:
-        opts, args = getopt.getopt(argv, "hvoa:l:c:b:s:m:", 
+        opts, args = getopt.getopt(argv, "hvoa:l:c:b:s:m:x:", 
             ["help", "verbose", "open", "artist=", "log=", "cache=", 
-             "beta=", "size=", "minimum="])
+             "beta=", "size=", "minimum=", "maximum="])
     except getopt.GetoptError, err:
         print >> sys.stderr, "Poorly specified options..." + str(err)
         usage()
@@ -221,9 +211,10 @@ def main(argv=None):
         elif opt in ("-v", "--verbose"):
             flag_verbose = True
             loggingConfig["level"] = logging.DEBUG
-        elif opt in ("-v", "--verbose"):
-            flag_verbose = True
-            loggingConfig["level"] = logging.DEBUG
+        elif opt in ("-m", "--minimum"):
+            minimum = int(arg)
+        elif opt in ("-x", "--maximum"):
+            maxPages = int(arg)
         elif opt in ("-a", "--artist"):
             profileID = int(arg)
         elif opt in ("-b", "--beta"):
@@ -241,7 +232,7 @@ def main(argv=None):
     
     logging.info("Estimating closest artist of %d" % profileID)
     start = time.time()    
-    closest = get_closest_friends(profileID, size, beta, minimum, cachePath)
+    closest = get_closest_friends(profileID, size, beta, minimum, maxPages, cachePath)
     # if filter min songs or last connected...
     # open viewProfile and remove them!
     logging.info("Elapsed time: %s" % (time.time() - start))
@@ -253,6 +244,14 @@ def main(argv=None):
 if __name__ == "__main__":
     sys.exit(main())
 
-# def getRecommendation(seedID, size=5):
-#     pass
+
+# 179485614 piratas
+# 284314184 go ape
+# 213036694 danger
+# 17442338 placebo
+# 115476392 sux
+# 64481548 subsonica
+# 48154667 amaral
+# 155754525 bon iver
+# 395541002 goremix
 

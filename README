@@ -1,5 +1,10 @@
 # 2009 - Claudio Baccigalupo
 
+# 09.01.26 Added threading model to speed up MySpace scraping.
+#          Now scraping an artist like Bloc Party takes about 5 hours.
+#          First recommendation system introduced.
+#          No support for profile names yet 
+
 # 09.01.22 First experiment with scraping MySpace to look for the closest
 #          friend of a specific profile. Current limitations:
 #          - No support for profile names, both because of Unicode and because
