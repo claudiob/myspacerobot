@@ -113,7 +113,7 @@ def get_friend_friends(profileID, maxPages, cachePath=None):
         store_cached(profileID, result, cachePath, "c")
     return result
 
-def are_friends(profileID, friendID, cachePath=None):
+def are_friends(profileID, friendID, maxPages, cachePath=None):
     '''Return True if friendID is in the list of friends of profileID.'''
     friendIDs = get_friendIDs(profileID, cachePath=cachePath, maxPages=maxPages)
     return friendID in friendIDs
@@ -132,11 +132,11 @@ def open_closest_friends(profileIDs):
     for profileID in profileIDs:
         webbrowser.open_new_tab(viewProfileURL + str(profileID))
 
-def recommend_friends(profileIDs, cachePath=None):
+def recommend_friends(profileIDs, maxPages, cachePath=None):
     for i, profileID in enumerate(profileIDs):
         other_friends = profileIDs[0:i] + profileIDs[i+1:len(profileIDs)]
         for friendID in other_friends:
-            if not are_friends(profileID, friendID, cachePath):
+            if not are_friends(profileID, friendID, maxPages, cachePath):
                 print "Recommend %d to %d" % (profileID, friendID)
 
 # ###########################
@@ -239,7 +239,7 @@ def main(argv=None):
     print "%d closest of %d: %s" % (len(closest), profileID, closest)
     if openbrowser:
         open_closest_friends(closest)
-    recommend_friends(closest, cachePath)
+    recommend_friends(closest, maxPages, cachePath)
 
 if __name__ == "__main__":
     sys.exit(main())
