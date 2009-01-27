@@ -9,9 +9,10 @@ import unittest
 
 def to_cache(path, data):
     '''Store data into local file.'''
-    if not os.path.exists(path):
+    folder = os.path.split(path)[0]
+    if not os.path.exists(folder):
         try:
-            os.makedirs(os.path.split(path)[0])
+            os.makedirs(folder)
         except:
             return False
     with open(path, 'w') as f:

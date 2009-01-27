@@ -65,7 +65,7 @@ def get_friendIDs(seed, cachePath=None, maxPages=None, isSeed=False):
     if pages is None:
         logging.debug("Error retrieving friends of %d" % seed)
         friends = None
-    if pages > maxPages and maxPages is not None and not isSeed:
+    elif pages > maxPages and maxPages is not None and not isSeed:
         logging.debug("Skipped friends of %d (%d pages)" % (seed, pages))
         friends = None
     elif not is_musician:
