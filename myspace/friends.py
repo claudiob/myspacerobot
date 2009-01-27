@@ -9,11 +9,20 @@ import logging
 import threading
 import time
 import webbrowser
+import random
 
 from myspace import *
 from cache import *
 from threads import *
 from utils import *
+
+# SEED_ID = 395541002
+# CACHE_PATH = "cache"
+# MAX_PAGES = 30
+# SIZE = 5
+# BETA = 0.75
+# MINIMUM = 100
+# OPEN_BROWSER = False
 
 # ###########################
 # Cache-related functions
@@ -113,10 +122,10 @@ def get_friend_friends(profileID, maxPages, cachePath=None):
         store_cached(profileID, result, cachePath, "c")
     return result
 
-def are_friends(profileID, friendID, maxPages, cachePath=None):
-    '''Return True if friendID is in the list of friends of profileID.'''
-    friendIDs = get_friendIDs(profileID, cachePath=cachePath, maxPages=maxPages)
-    return friendID in friendIDs
+# def are_friends(profileID, friendID, maxPages, cachePath=None):
+#     '''Return True if friendID is in the list of friends of profileID.'''
+#     friendIDs = get_friendIDs(profileID, cachePath=cachePath, maxPages=maxPages)
+#     return friendID in friendIDs
 
 def get_closest_friends(seed, size, beta, minimum, maxPages, cachePath=None):
     '''Return the friends of seed with most friends in common with seed.'''
@@ -125,6 +134,7 @@ def get_closest_friends(seed, size, beta, minimum, maxPages, cachePath=None):
     rank = [[f[2]*1.0/pow(f[1], beta) if f[1] >= minimum else 0, f[0]] for f in friends]
     rank.sort()
     rank.reverse()
+    # if filter min songs or last connected, open viewProfile and remove them!    
     return [r[1] for r in rank[:size] if r[0] > 0 ]
 
 def open_closest_friends(profileIDs):
@@ -133,11 +143,12 @@ def open_closest_friends(profileIDs):
         webbrowser.open_new_tab(viewProfileURL + str(profileID))
 
 def recommend_friends(profileIDs, maxPages, cachePath=None):
-    for i, profileID in enumerate(profileIDs):
-        other_friends = profileIDs[0:i] + profileIDs[i+1:len(profileIDs)]
-        for friendID in other_friends:
-            if not are_friends(profileID, friendID, maxPages, cachePath):
-                print "Recommend %d to %d" % (profileID, friendID)
+    for profileID in profileIDs:
+        rec_list = difference(profileIDs, get_friendIDs(profileID, cachePath=cachePath, maxPages=maxPages))
+        rec_list = difference(rec_list, [profileID])
+        if len(rec_list) > 0:
+            rec_item = rec_list[random.randrange(len(rec_list))]
+            print "Recommend for %d is %d" % (profileID, rec_item)
 
 # ###########################
 # Main functions
@@ -158,6 +169,7 @@ def usage():
     return
 
 
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -166,7 +178,7 @@ def main(argv=None):
     grabList = []
     cachePath = os.path.expanduser("cache")
     flag_verbose = skip = 0
-    beta = 1.0
+    beta = 0.75
     size = 5
     minimum = 100
     openbrowser = False
@@ -233,8 +245,6 @@ def main(argv=None):
     logging.info("Estimating closest artist of %d" % profileID)
     start = time.time()    
     closest = get_closest_friends(profileID, size, beta, minimum, maxPages, cachePath)
-    # if filter min songs or last connected...
-    # open viewProfile and remove them!
     logging.info("Elapsed time: %s" % (time.time() - start))
     print "%d closest of %d: %s" % (len(closest), profileID, closest)
     if openbrowser:

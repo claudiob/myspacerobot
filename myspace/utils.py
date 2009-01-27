@@ -8,8 +8,13 @@
 import operator
 
 def intersect(a, b):
-    '''Return the intersection of two lists'''
+    '''Return the intersection of two lists.'''
     return list(set(a) & set(b))
+
+def difference(a, b):
+    '''Return the difference of two lists.'''
+    return list(set(a) - set(b))
+
 
 def is_digit(char): 
     '''Return true if char is a digit.'''
