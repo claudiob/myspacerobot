@@ -16,7 +16,7 @@ import ClientForm
 import unittest
 
 from account import *
-from myspace import *
+from paths import *
 from utils import *
 
 __author__ = "Claudio Baccigalupo"

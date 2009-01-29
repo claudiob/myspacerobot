@@ -13,7 +13,7 @@ import os
 import logging
 import unittest
 
-from myspace import view_friends_URL, parse_friends_URL
+from paths import view_friends_URL, parse_friends_URL
 from threads import *
 from utils import *
 
