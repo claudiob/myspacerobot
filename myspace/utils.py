@@ -1,11 +1,15 @@
 #!/usr/bin/env python
+"""Provides auxiliary functions.
 
-# 2009 - Claudio Baccigalupo
+"""
+
+import operator
+
+__author__ = "Claudio Baccigalupo"
 
 # ###########################
 # Auxiliary functions
 # ###########################
-import operator
 
 def intersect(a, b):
     '''Return the intersection of two lists.'''
@@ -14,7 +18,6 @@ def intersect(a, b):
 def difference(a, b):
     '''Return the difference of two lists.'''
     return list(set(a) - set(b))
-
 
 def is_digit(char): 
     '''Return true if char is a digit.'''
@@ -26,4 +29,14 @@ def flatten(l):
     if len(l) > 0:
         l = reduce(operator.add, l)
     return l
+
+class Usage(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+def read_int(arg):
+    try:
+        return int(arg)
+    except (TypeError, ValueError):
+        raise Usage("The specified value is not an integer")
 

@@ -1,19 +1,23 @@
 #!/usr/bin/env python
+"""Provides call_threaded, for launching a function on multiple threads.'''
 
-# 2009 - Claudio Baccigalupo
+call_threaded takes a function and a series of data and launch the function
+on a separate thread for each data item, then return the cumulative result.
 
-import threading
+Test usage: python threads.py
+"""
+
 from Queue import Queue
+import threading
 import logging
 import unittest
 
-# ###########################
-# Thread-related functions
-# ###########################
+__author__ = "Claudio Baccigalupo"
 
 class FunctionThreader(threading.Thread):
+    '''A threading class to invoke a function with given data and params.'''
     def __init__(self, function, data, params):
-        threading.Thread.__init__(self) # init from parent
+        threading.Thread.__init__(self)
         self.function = function
         self.data = data
         self.params = params
@@ -26,7 +30,9 @@ class FunctionThreader(threading.Thread):
         self.result = self.function(self.data, **self.params)
 
 def call_threaded(function, data, queueSize=10, params={}):
-    def producer_get(q, function, data):
+    '''Create a queue of queueSize function threads and wait for completion.'''
+    def producer(q, function, data):
+        '''Create one thread for each item to evaluate.'''
         for item in data:
             thread = FunctionThreader(function, item, params)
             thread.start()
@@ -34,17 +40,18 @@ def call_threaded(function, data, queueSize=10, params={}):
 
     finished = []
     def consumer(q, count_threads):
+        '''Wait for all the threads to complete.'''
         missing = count_threads - len(finished)
         while missing > 0:
             thread = q.get(True)
             thread.join()
             finished.append(thread.get_result())
-            if missing % 50 == 0:
+            if missing % 25 == 0:
                 logging.info("[%d more to load]" % missing)
             missing = count_threads - len(finished)
 
     q = Queue(queueSize)
-    prod_thr = threading.Thread(target=producer_get, args=(q, function, data))
+    prod_thr = threading.Thread(target=producer, args=(q, function, data))
     cons_thr = threading.Thread(target=consumer, args=(q, len(data)))
     prod_thr.start()
     cons_thr.start()
@@ -54,7 +61,6 @@ def call_threaded(function, data, queueSize=10, params={}):
     
     
 class TestCache(unittest.TestCase):
-
     def testThreads(self):
         oct_50 = [oct(i) for i in range(50)]
         self.assertEqual(oct_50, call_threaded(oct, range(50), 10))

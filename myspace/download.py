@@ -1,19 +1,19 @@
 #!/usr/bin/env python
+"""Provides download_page, for retrieving a Web page with error check.'''
 
-# 2009 - Claudio Baccigalupo
+download_page opens a Web page and check for URL and socket errors, trying
+again several times to retrieve the page if an error occurs.
 
-"""\
-
-__intro__
-
-urltry.py wraps urllib open/get functions around try statements 
-
+Test usage: python download.py
 """
 
 from time import sleep
 import urllib
 import socket
 import logging
+import unittest
+
+__author__ = "Claudio Baccigalupo"
 
 def try_open(url):
 	'''Try to open a url 3 times, then fail.'''
@@ -36,28 +36,8 @@ def try_open(url):
 				logging.error("URL open error after 3 tries, failing")
 				return None
 
-def try_get(url, path):
-	'''Try to get a file from url 3 times, then fail.'''
-	try:
-		resp = urllib.urlretrieve(url,path)
-		return resp
-	except:
-		logging.warn("URL get error on " + url + ", retry 1")
-		sleep(.5)
-		try:
-			resp = urllib.urlretrieve(url,path)
-			return resp
-		except:
-			logging.warn("URL get error, retry 2")
-			sleep(.5)
-			try:
-				resp = urllib.urlretrieve(url,path)
-				return resp
-			except:
-				logging.error("URL get error after 3 tries, failing")
-				return None
-
-def get_page(url):
+def download_page(url):
+    '''Download a Web page checking for URL and socket errors.'''
     resp = try_open(url)
     if resp == None:
         logging.error("URL error on %s (skipping)" % url)
@@ -78,3 +58,12 @@ def get_page(url):
     resp.close()
     return page
 
+
+class TestDownload(unittest.TestCase):
+    def testDownload(self):
+        page = download_page("http://www.myspace.com")
+        self.assertTrue(page.find("MySpace") > 0)
+        # Add more tests if needed
+
+if __name__ == '__main__':
+    unittest.main()

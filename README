@@ -1,5 +1,12 @@
 # 2009 - Claudio Baccigalupo
 
+# 09.01.29 Separated different functions into independent modules:
+#          - friends.py scrape MySpace for the friends of a profile
+#          - compose.py send a message to a MySpace profile
+#          To do: Ctrl Break to stop threaded functions
+#          To do: Add profile.py, bestfriends.py, recommend.py
+#          To do: Add a cron to schedule recommendations
+
 # 09.01.26 Added threading model to speed up MySpace scraping.
 #          Now scraping an artist like Bloc Party takes about 5 hours.
 #          First recommendation system introduced.
