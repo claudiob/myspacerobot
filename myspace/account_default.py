@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""A template for account.py to contain private data to login to MySpace.'''
+# -*- coding: UTF-8 -*-
+"""A template for account.py to contain private data to login to MySpace.
 
 MYSPACE_EMAIL is the e-mail to log in to MySpace.
 MYSPACE_PWD is the password to log in to MySpace.

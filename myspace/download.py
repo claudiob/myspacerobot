@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Provides download_page, for retrieving a Web page with error check.'''
+# -*- coding: UTF-8 -*-
+"""Provides download_page, for retrieving a Web page with error check.
 
 download_page opens a Web page and check for URL and socket errors, trying
 again several times to retrieve the page if an error occurs.

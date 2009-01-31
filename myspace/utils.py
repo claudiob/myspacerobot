@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: UTF-8 -*-
 """Provides auxiliary functions.
 
 """
@@ -11,9 +12,12 @@ __author__ = "Claudio Baccigalupo"
 # Auxiliary functions
 # ###########################
 
-def intersect(a, b):
-    '''Return the intersection of two lists.'''
-    return list(set(a) & set(b))
+def intersect_size(a, b):
+    '''Return the intersection size of two lists, 0 if either is None.'''
+    try:
+        return len(list(set(a) & set(b)))
+    except TypeError:
+        return 0
 
 def difference(a, b):
     '''Return the difference of two lists.'''
@@ -40,3 +44,7 @@ def read_int(arg):
     except (TypeError, ValueError):
         raise Usage("The specified value is not an integer")
 
+def map_id(friends):
+    if friends is None:
+        return None
+    return [f["id"] for f in friends]

@@ -1,89 +1,96 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
-"""Provides scrape_friends, for listing the friends of a MySpace profile.
+"""Provides load_best, to load best friends of a MySpace profile.
 
-scrape_friends connects to the MySpace Web page, retrieves all the pages
-listing the friends of that profile, and returns a list of their MySpace IDs.
-
-Example usage: python friends.py 395541002
+load_best retrieves all the friends of a seed MySpace profile, and 
+returns those that have some friend in common with the seed profile, ordered
+by decreasing number of common friends, increasing number of total friends.
 """
 
 import sys
 import getopt
 import os
 import logging
-import unittest
+import threading
+import time
+import webbrowser
+import random
 
-from paths import view_friends_URL, parse_friends_URL
+from cache import *
 from threads import *
 from utils import *
-from cache import *
+from friends import *
 
 __author__ = "Claudio Baccigalupo"
+           
+def scrape_best(profile, page_limits=[None, None], only_artists=True, cache=None):
+    '''Count the friends of each friend of profileID and the ones in common.'''
+    ###### 1. Load friends of id (from web is cache is empty) #####
+    friends = load_friends(profile, page_limits, only_artists, cache)
+    if friends is None and cache is not None:
+        logging.debug("No friends in cache for %s, trying web" % profile)
+        friends = scrape_friends(profile, page_limits, only_artists)
+    if friends is None:
+        logging.debug("No friends found for %s" % profile)
+        return
+    ###### 2. Load friends of each friend (threaded) #####
+    logging.debug("Parsed %d friends of %s" % (len(friends), profile))
+    params = {"page_limits": page_limits, "only_artists": only_artists}
+    params["cache"] = cache
+    ffriends = call_threaded(load_friends, friends, queueSize=5, params=params)
+    logging.debug("Retrieved %d friends of %s" % (len(friends), profile))
+    ###### 3. Count friends and friends in common with id #####
+    friends_id = map_id(friends)
+    count_common = [intersect_size(friends_id, map_id(f)) for f in ffriends]
+    best = [{"profile": friend, "friends": len(ffriends[i]), "common": count_common[i]} \
+            for i, friend in enumerate(friends) if count_common[i] > 0]
+    ###### 4. Return friends ordered by max common friends, min friends #####
+    best.sort(key = lambda x:(-x["common"], x["friends"]))
+    return best
 
-# class Profile(dict):
-#     def __init__(self, id=None, name=None):
-#         self["id"] = id
-#         self["name"] = name
-#     def id(self):
-#         return self["id"]
-#     def name(self):
-#         return self["name"]
-
-def scrape_friends(profile, page_limits=[None,None], only_artists=True):
-    '''Retrieve all the friends of id from the web.'''
-    url = view_friends_URL(profile["id"])
-    min_pages, max_pages = page_limits
-    friends, count_pages, is_artist = parse_friends_URL(url, only_id=False)
-    if count_pages is None:
-        logging.debug("Error retrieving friends of %s" % profile)
-        friends = None
-    elif count_pages < min_pages and min_pages is not None:
-        logging.debug("Skipped friends of %s (%d<%d pages)" % 
-            (profile, count_pages, min_pages))
-        friends = None
-    elif count_pages > max_pages and max_pages is not None:
-        logging.debug("Skipped friends of %s (%d>%d pages)" % 
-            (profile, count_pages, max_pages))
-        friends = None
-    elif not is_artist and only_artists is True:
-        logging.debug("Skipped friends of %s (not artist)" % profile)
-        friends = None
-    else:
-        pages = range(1, count_pages) # For each page after the first
-        URLs = [view_friends_URL(profile["id"], page) for page in pages]
-        more_friends = call_threaded(parse_friends_URL, URLs, queueSize=20)
-        friends.extend(flatten(more_friends))
-        logging.debug("Loaded %d friends of %s (from MySpace)" % 
-            (len(friends), profile))
-    return friends
-
-def load_friends(profile, page_limits=[None, None], only_artists=True, cache=None):
-    '''Retrieve all the friends of id either from cache or the web.'''
+def load_best(profile, page_limits=[None, None], only_artists=True, cache=None):
+    '''Retrieve best friends of id either from cache or the web.'''
     ###### 1. Load from cache if available #####
-    # sys.exit()
-    friends = from_cache(profile["id"], cache)
-    if friends is not False:
-        # SLOW! logging.debug("Loaded %d friends of %s (from cache)" % 
-        #    (len(friends) if friends is not None else 0, profile))
-        return friends
+    cache_ext = "c" # Save best_friends files as "<ID>c.txt"
+    best = from_cache(profile["id"], cache, ext=cache_ext)
+    if best is not False:
+        logging.debug("Loaded %d best friends of %s (from cache)" % 
+            (len(best) if best is not None else 0, profile))
+        return best
     ###### 2. Load from web and store in cache otherwise #####
-    friends = scrape_friends(profile, page_limits, only_artists)
+    best = scrape_best(profile, page_limits, only_artists, cache)
     if cache is not None:
-        to_cache(profile["id"], cache, friends)
-    return friends
+        to_cache(profile["id"], cache, best, ext=cache_ext)
+    return best
+
+def recommend(profile, beta=0.75, size=5, page_limits=[None, None], only_artists=True, cache=None):
+    '''Recommend a friend of profile to another friend of profile.'''
+    ###### 1. Load best friends of profile #####
+    best = load_best(profile, page_limits, only_artists, cache_path)
+
+    rank = [{"profile": b["profile"], "weight": \
+        b["common"]*1.0/pow(b["friends"], beta)} for b in best]
+    rank.sort(key = lambda x:(-x["weight"]))
+    return rank[:size]
+    
+    ## CONTINUA DA QUA!! IN REALTA' QUESTO MODULO DEVE RITORNARE
+    ## QUELLA CHE ORA SI CHIAMA RECOMMEND, CHE SI DOVRA' CHIAMARE BEST
+    ## MENTRE LA SCRAPE_BEST E LOAD_BEST SARANNO QUALCOSA TIPO
+    ## DETAILED_FRIENDS O CONNECTED O NON LO SO!!
+    ## POI CAMBIA ANCHE IL TEST E LA CHIAMATA NELLA MAIN!
+
 
 # ###########################
 # Test functions
 # ###########################
 
-class TestFriends(unittest.TestCase):
+class TestBest(unittest.TestCase):
 
-    def testFriends(self):
-        # Test that goremix is a friend of neurain
-        self.assertTrue(270977337 in [p["id"] \
-            for p in load_friends({"id": 395541002})])
-        # Add more tests if needed
+    def testBest(self):
+        # Test that neurain has 7 friends, 0 in common with goremix
+        self.assertTrue([270977337, 7, 0] in load_best({"id": 395541002}))
+        # Change with more meaningful test
+
 
 # ###########################
 # Main functions
@@ -105,8 +112,8 @@ def main(argv=None):
         print ("   -l [--log]   <path> set the path to the log file")
         return
 
-    min_pages      = None
-    max_pages      = None
+    min_pages      = 2    # min 80 friends
+    max_pages      = 30   # max 1200 friends
     only_artists   = True
     profile_id     = None
     cache_path     = None
@@ -170,8 +177,8 @@ def main(argv=None):
         ###### 5. Retrieve friends ######
         page_limits = [min_pages, max_pages]
         profile = {"id": profile_id}
-        friends = load_friends(profile, page_limits, only_artists, cache_path)
-        return friends
+        best = load_best(profile, page_limits, only_artists, cache_path)
+        return best
     ###### Manage errors ######
     except Usage, err:
         print >>sys.stderr, err.msg
@@ -181,15 +188,4 @@ def main(argv=None):
 if __name__ == "__main__":
     sys.exit(main())
 
-
-
-# 179485614 piratas
-# 284314184 go ape
-# 213036694 danger
-# 17442338 placebo
-# 115476392 sux
-# 64481548 subsonica
-# 48154667 amaral
-# 155754525 bon iver
-# 395541002 goremix
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Provides send_message, for sending a message to a MySpace profile.'''
+# -*- coding: UTF-8 -*-
+"""Provides send_message, for sending a message to a MySpace profile.
 
 send_message connects to the MySpace Web page as a registered user, and
 send a private message with given subject and body to a recipient profile.
@@ -72,8 +73,8 @@ def open_connection(email, password):
     # 4. Check if login was successful
     try:        
         loginPatt = '"UserId":(.*?),'
-        profile_id = int(re.search(loginPatt, result).group(1))
-        return profile_id > 0
+        id = int(re.search(loginPatt, result).group(1))
+        return id > 0
     except (TypeError, ValueError, AttributeError):
         return False
 
@@ -103,7 +104,7 @@ def main(argv=None):
     body           = "This is a test message"
     log_path       = None
     logging_config = {"level": logging.INFO}
-    profile_id     = None
+    id     = None
     if argv is None:
         argv = sys.argv
     try:
@@ -141,7 +142,7 @@ def main(argv=None):
         elif len(args) > 1:
             raise Usage("You specified more than one recipient MySpaceUID")
         else:
-            profile_id = read_int(args[0])
+            id = read_int(args[0])
         ###### 4. Enable logging ######
         logging_config["format"] = '%(asctime)s %(levelname)-8s %(message)s'
         logging_config["datefmt"] = '%Y/%M/%D %H:%M:%S'
@@ -153,11 +154,11 @@ def main(argv=None):
         if not open_connection(email, pwd):
             logging.error("Could not login %s to MySpace" % email)
             return 3
-        result = send_message(profile_id, subject, body, email, pwd, open=True)
+        result = send_message(id, subject, body, email, pwd, open=True)
         if not result:
-            logging.error("Could not send message to %s" % profile_id)
+            logging.error("Could not send message to %s" % id)
         else:
-            logging.info("Message sent from %s to %d" % (email, profile_id))
+            logging.info("Message sent from %s to %d" % (email, id))
         return result
     ###### Manage errors ######
     except Usage, err:

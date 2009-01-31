@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Provides call_threaded, for launching a function on multiple threads.'''
+# -*- coding: UTF-8 -*-
+"""Provides call_threaded, for launching a function on multiple threads.
 
 call_threaded takes a function and a series of data and launch the function
 on a separate thread for each data item, then return the cumulative result.
