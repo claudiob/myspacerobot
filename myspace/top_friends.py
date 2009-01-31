@@ -94,7 +94,6 @@ class TestTopFriends(unittest.TestCase):
         top in load_top_friends(self.profile1, filters=self.filters, size=10)])
     # Change with more meaningful test
 
-
 # ###########################
 # Main functions
 # ###########################
@@ -111,6 +110,8 @@ def main(argv=None):
         print ("   -a [--all]   include also not musician profiles")
         print ("   -m [--min]   <int> specify the minimum friends' pages")
         print ("   -x [--max]   <int> specify the maximum friends' pages")
+        print ("   -b [--beta]  <float> specify the popularity bias [0-1]")
+        print ("   -s [--size]  <int> specify the number of top friends")
         print ("   -c [--cache] <path> set the path to the cache files")
         print ("   -l [--log]   <path> set the path to the log file")
         return
