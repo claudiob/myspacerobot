@@ -30,23 +30,22 @@ __author__ = "Claudio Baccigalupo"
 #     def name(self):
 #         return self["name"]
 
-def scrape_friends(profile, page_limits=[None,None], only_artists=True):
-    '''Retrieve all the friends of id from the web.'''
+def scrape_friends(profile, filters):
+    '''Retrieve all the friends of id from the web that satisfy filters.'''
     url = view_friends_URL(profile["id"])
-    min_pages, max_pages = page_limits
     friends, count_pages, is_artist = parse_friends_URL(url, only_id=False)
     if count_pages is None:
         logging.debug("Error retrieving friends of %s" % profile)
         friends = None
-    elif count_pages < min_pages and min_pages is not None:
+    elif filters and filters["min_pages"] and count_pages<filters["min_pages"]:
         logging.debug("Skipped friends of %s (%d<%d pages)" % 
-            (profile, count_pages, min_pages))
+            (profile, count_pages, filters["min_pages"]))
         friends = None
-    elif count_pages > max_pages and max_pages is not None:
+    elif filters and filters["max_pages"] and count_pages>filters["max_pages"]:
         logging.debug("Skipped friends of %s (%d>%d pages)" % 
-            (profile, count_pages, max_pages))
+            (profile, count_pages, filters["max_pages"]))
         friends = None
-    elif not is_artist and only_artists is True:
+    elif filters and filters["only_artists"] and not is_artist:
         logging.debug("Skipped friends of %s (not artist)" % profile)
         friends = None
     else:
@@ -58,7 +57,7 @@ def scrape_friends(profile, page_limits=[None,None], only_artists=True):
             (len(friends), profile))
     return friends
 
-def load_friends(profile, page_limits=[None, None], only_artists=True, cache=None):
+def load_friends(profile, filters=None, cache=None):
     '''Retrieve all the friends of id either from cache or the web.'''
     ###### 1. Load from cache if available #####
     # sys.exit()
@@ -68,7 +67,7 @@ def load_friends(profile, page_limits=[None, None], only_artists=True, cache=Non
         #    (len(friends) if friends is not None else 0, profile))
         return friends
     ###### 2. Load from web and store in cache otherwise #####
-    friends = scrape_friends(profile, page_limits, only_artists)
+    friends = scrape_friends(profile, filters)
     if cache is not None:
         to_cache(profile["id"], cache, friends)
     return friends
@@ -168,9 +167,10 @@ def main(argv=None):
             logging_config["filemode"] = "w"
         logging.basicConfig(**logging_config)
         ###### 5. Retrieve friends ######
-        page_limits = [min_pages, max_pages]
         profile = {"id": profile_id}
-        friends = load_friends(profile, page_limits, only_artists, cache_path)
+        filters = {"max_pages": max_pages, "min_pages": min_pages, \
+                   "only_artists": only_artists}
+        friends = load_friends(profile, filters, cache_path)
         return friends
     ###### Manage errors ######
     except Usage, err:

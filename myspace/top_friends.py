@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
-"""Provides load_best, to load best friends of a MySpace profile.
+"""Provides load_top_friends, to load top friends of a MySpace profile.
 
-load_best retrieves all the friends of a seed MySpace profile, and 
+load_ranked_friends retrieves all the friends of a seed MySpace profile, and 
 returns those that have some friend in common with the seed profile, ordered
 by decreasing number of common friends, increasing number of total friends.
 """
@@ -23,73 +23,76 @@ from friends import *
 
 __author__ = "Claudio Baccigalupo"
            
-def scrape_best(profile, page_limits=[None, None], only_artists=True, cache=None):
+def scrape_ranked_friends(profile, filters=None, cache=None):
     '''Count the friends of each friend of profileID and the ones in common.'''
     ###### 1. Load friends of id (from web is cache is empty) #####
-    friends = load_friends(profile, page_limits, only_artists, cache)
+    friends = load_friends(profile, filters, cache)
     if friends is None and cache is not None:
         logging.debug("No friends in cache for %s, trying web" % profile)
-        friends = scrape_friends(profile, page_limits, only_artists)
+        friends = scrape_friends(profile, filters)
     if friends is None:
         logging.debug("No friends found for %s" % profile)
         return
     ###### 2. Load friends of each friend (threaded) #####
     logging.debug("Parsed %d friends of %s" % (len(friends), profile))
-    params = {"page_limits": page_limits, "only_artists": only_artists}
-    params["cache"] = cache
+    params = {"filters": filters, "cache": cache}
     ffriends = call_threaded(load_friends, friends, queueSize=5, params=params)
     logging.debug("Retrieved %d friends of %s" % (len(friends), profile))
     ###### 3. Count friends and friends in common with id #####
     friends_id = map_id(friends)
     count_common = [intersect_size(friends_id, map_id(f)) for f in ffriends]
-    best = [{"profile": friend, "friends": len(ffriends[i]), "common": count_common[i]} \
+    ranked = [{"profile": friend, "friends": len(ffriends[i]), "common": count_common[i]} \
             for i, friend in enumerate(friends) if count_common[i] > 0]
     ###### 4. Return friends ordered by max common friends, min friends #####
-    best.sort(key = lambda x:(-x["common"], x["friends"]))
-    return best
+    ranked.sort(key = lambda x:(-x["common"], x["friends"]))
+    return ranked
 
-def load_best(profile, page_limits=[None, None], only_artists=True, cache=None):
-    '''Retrieve best friends of id either from cache or the web.'''
+def load_ranked_friends(profile, filters=None, cache=None):
+    '''Retrieve ranked friends of profile either from cache or the web.'''
     ###### 1. Load from cache if available #####
-    cache_ext = "c" # Save best_friends files as "<ID>c.txt"
-    best = from_cache(profile["id"], cache, ext=cache_ext)
-    if best is not False:
-        logging.debug("Loaded %d best friends of %s (from cache)" % 
-            (len(best) if best is not None else 0, profile))
-        return best
+    cache_ext = "c" # Save ranked_friends files as "<ID>c.txt"
+    ranked = from_cache(profile["id"], cache, ext=cache_ext)
+    if ranked is not False:
+        logging.debug("Loaded %d ranked friends of %s (from cache)" % 
+            (len(ranked) if ranked is not None else 0, profile))
+        return ranked
     ###### 2. Load from web and store in cache otherwise #####
-    best = scrape_best(profile, page_limits, only_artists, cache)
+    ranked = scrape_ranked_friends(profile, filters, cache)
     if cache is not None:
-        to_cache(profile["id"], cache, best, ext=cache_ext)
-    return best
+        to_cache(profile["id"], cache, ranked, ext=cache_ext)
+    return ranked
 
-def recommend(profile, beta=0.75, size=5, page_limits=[None, None], only_artists=True, cache=None):
-    '''Recommend a friend of profile to another friend of profile.'''
-    ###### 1. Load best friends of profile #####
-    best = load_best(profile, page_limits, only_artists, cache_path)
-
-    rank = [{"profile": b["profile"], "weight": \
-        b["common"]*1.0/pow(b["friends"], beta)} for b in best]
-    rank.sort(key = lambda x:(-x["weight"]))
-    return rank[:size]
+def load_top_friends(profile, beta=0, size=1, filters=None, cache=None):
+    '''Return top friends of a profile according to ranking, size and beta.'''
+    ###### 1. Load ranked friends of profile #####
+    rank = load_ranked_friends(profile, filters, cache)
+    if rank is None:
+        logging.debug("Profile %s has no top friends" % profile)
+        return None
+    top = [{"profile": friend["profile"], "weight": \
+        friend["common"]*1.0/pow(friend["friends"], beta)} for friend in rank]
+    top.sort(key = lambda x:(-x["weight"]))
+    return top[:size]
     
-    ## CONTINUA DA QUA!! IN REALTA' QUESTO MODULO DEVE RITORNARE
-    ## QUELLA CHE ORA SI CHIAMA RECOMMEND, CHE SI DOVRA' CHIAMARE BEST
-    ## MENTRE LA SCRAPE_BEST E LOAD_BEST SARANNO QUALCOSA TIPO
-    ## DETAILED_FRIENDS O CONNECTED O NON LO SO!!
-    ## POI CAMBIA ANCHE IL TEST E LA CHIAMATA NELLA MAIN!
-
-
 # ###########################
 # Test functions
 # ###########################
 
-class TestBest(unittest.TestCase):
-
-    def testBest(self):
-        # Test that neurain has 7 friends, 0 in common with goremix
-        self.assertTrue([270977337, 7, 0] in load_best({"id": 395541002}))
-        # Change with more meaningful test
+class TestTopFriends(unittest.TestCase):
+    def setUp(self):
+        self.profile1 = {"id": 270977337} # goremix
+        self.profile2 = {'id': 395541002, 'name': 'g'}
+        self.filters  = {"max_pages":30, "only_artists":True, "min_pages":1}    
+    def testRankedFriends(self):
+        # Test that neurain has 6 friends, 1 in common with goremix
+        friends2 = {'profile': self.profile2, 'friends': 6, 'common': 1}
+        self.assertTrue(friends2 in \
+            load_ranked_friends(self.profile1, filters=self.filters))
+    def testTopFriends(self):
+        # Test that assertTrue is a top friend of goremix
+        self.assertTrue(self.profile2["id"] in [top["profile"]["id"] for \
+        top in load_top_friends(self.profile1, filters=self.filters, size=10)])
+    # Change with more meaningful test
 
 
 # ###########################
@@ -114,6 +117,8 @@ def main(argv=None):
 
     min_pages      = 2    # min 80 friends
     max_pages      = 30   # max 1200 friends
+    beta           = 0.75
+    size           = 10
     only_artists   = True
     profile_id     = None
     cache_path     = None
@@ -124,8 +129,9 @@ def main(argv=None):
     try:
         ###### 1. Retrieve opts and args #####
         try:
-            opts, args = getopt.getopt(argv[1:], "htdac:l:m:x:", 
-            ["help", "test", "debug", "all", "cache=", "log=", "min=", "max="])
+            opts, args = getopt.getopt(argv[1:], "htdac:l:m:x:b:s:", 
+            ["help", "test", "debug", "all", "cache=", "log=", 
+             "min=", "max=", "beta=", "size="])
         except getopt.error, msg:
              raise Usage(msg)
         ###### 2. Process opts ###### 
@@ -135,7 +141,7 @@ def main(argv=None):
                 sys.exit()
             elif opt in ("-t", "--test"):
                 suite = unittest.TestSuite()
-                suite.addTest(unittest.makeSuite(TestFriends))
+                suite.addTest(unittest.makeSuite(TestTopFriends))
                 unittest.TextTestRunner(verbosity=2).run(suite)
                 sys.exit()
             elif opt in ("-l", "--log"):
@@ -160,6 +166,10 @@ def main(argv=None):
                 min_pages = read_int(arg)
             elif opt in ("-x", "--max"):
                 max_pages = read_int(arg)
+            elif opt in ("-b", "--beta"):
+                beta = read_float(arg)
+            elif opt in ("-s", "--size"):
+                size = read_int(arg)
         ###### 3. Process args ######
         if len(args) < 1:
             raise Usage("You did not specify a MySpaceUID")
@@ -175,10 +185,16 @@ def main(argv=None):
             logging_config["filemode"] = "w"
         logging.basicConfig(**logging_config)
         ###### 5. Retrieve friends ######
-        page_limits = [min_pages, max_pages]
         profile = {"id": profile_id}
-        best = load_best(profile, page_limits, only_artists, cache_path)
-        return best
+        filters = {"max_pages": max_pages, "min_pages": min_pages, \
+                   "only_artists": only_artists}
+        top = load_top_friends(profile, beta, size, filters, cache_path)
+        if top is not None:
+            print "The top friends of %s are:" % profile
+            for i, friend in enumerate(top):
+                print "%d) %s (%d): %.3f" % (i+1, friend["profile"]["name"], \
+                 friend["profile"]["id"], friend["weight"])
+        return top
     ###### Manage errors ######
     except Usage, err:
         print >>sys.stderr, err.msg

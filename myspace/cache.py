@@ -15,7 +15,7 @@ import unittest
 
 __author__ = "Claudio Baccigalupo"
 
-def cache_path(id, cache_dir, ext=None):
+def get_cache_path(id, cache_dir, ext=None):
     '''Convert 123456789012 into [cache_dir]/123/456/789/012[ext].txt.'''
     path = "/".join([str(id).zfill(12)[3*i:3*i+3] for i in range(4)])
     if ext is not None:
@@ -25,7 +25,7 @@ def cache_path(id, cache_dir, ext=None):
 def from_cache(id, cache_dir, ext=None):
     '''Return data of id from cache, False if error.'''
     try:
-        path = cache_path(id, cache_dir, ext)
+        path = get_cache_path(id, cache_dir, ext)
         with open(path, 'r') as f:
             return pickle.load(f)
     except (IOError, TypeError, AttributeError):
@@ -34,7 +34,7 @@ def from_cache(id, cache_dir, ext=None):
 def to_cache(id, cache_dir, data, ext=None):
     '''Store data into local file, False if error.'''
     try:
-        path = cache_path(id, cache_dir, ext)
+        path = get_cache_path(id, cache_dir, ext)
         folder = os.path.split(path)[0]
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -49,7 +49,7 @@ class TestCache(unittest.TestCase):
     def setUp(self):
         self.id = 999999999999
         self.cache_dir = "cache"
-        self.path = cache_path(self.id, self.cache_dir)
+        self.path = get_cache_path(self.id, self.cache_dir)
     
     def tearDown(self):
         if os.path.exists(self.path): 

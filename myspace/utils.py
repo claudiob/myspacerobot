@@ -44,6 +44,12 @@ def read_int(arg):
     except (TypeError, ValueError):
         raise Usage("The specified value is not an integer")
 
+def read_float(arg):
+    try:
+        return float(arg)
+    except (TypeError, ValueError):
+        raise Usage("The specified value is not a float")
+
 def map_id(friends):
     if friends is None:
         return None
