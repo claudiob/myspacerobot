@@ -34,9 +34,13 @@ def send_recommendations(profile, beta=0, size=1, filters=None, cache=None):
     pass
     
 # ###########################
-# Main functions
+# Test functions
 # ###########################
 
+class TestRecommend(unittest.TestCase):
+    def testRecommend(self):
+        # Add meaningful test
+        self.assertTrue(True)
 
 # ###########################
 # Main functions
@@ -86,7 +90,7 @@ def main(argv=None):
                 sys.exit()
             elif opt in ("-t", "--test"):
                 suite = unittest.TestSuite()
-                suite.addTest(unittest.makeSuite(TestTopFriends))
+                suite.addTest(unittest.makeSuite(TestRecommend))
                 unittest.TextTestRunner(verbosity=2).run(suite)
                 sys.exit()
             elif opt in ("-l", "--log"):
@@ -138,6 +142,8 @@ def main(argv=None):
             print "The recommendatios based on profile %s are:" % profile
             for i, rec in enumerate(recs):
                 print "%d) Recommend %s to %s" % (i+1, rec["what"], rec["to"])
+            #open_connection(email, pwd)
+            #result = send_rec_message(...)
         return recs
     ###### Manage errors ######
     except Usage, err:
@@ -148,112 +154,6 @@ def main(argv=None):
 if __name__ == "__main__":
     sys.exit(main())
 
-# 
-# 
-# def usage():
-#     # Add an interactive version to add parameters one by one
-#     print ("Usage: friends.py <options>")
-#     print ("   options:")
-#     print ("   -h [--help]    print this usage statement")
-#     print ("   -v [--verbose] more info to standard out")
-#     print ("   -o [--open]    open closest profiles in a web browser")
-#     print ("   -a [--artist]  <mySpaceUID> specify the starting artist ID")
-#     print ("   -b [--beta]    <value in [0,1]> specify the popularity bias")
-#     print ("   -m [--minimum] <integer> specify the minimum number of friends")
-#     print ("   -x [--maximum] <integer> specify the maximum number of pages")
-#     print ("   -c [--cache]   <cache path> set the path to the cache folder")
-#     print ("   -l [--log]     <log file path> set the path to the log file")
-#     return
-# 
-# 
-# 
-# def main(argv=None):
-#     if argv is None:
-#         argv = sys.argv[1:]
-#     profileID = 284314184 # By default use Go Ape
-#     friends = []
-#     grabList = []
-#     cachePath = os.path.expanduser("cache")
-#     flag_verbose = skip = 0
-#     beta = 0.75
-#     size = 5
-#     minimum = 100
-#     openbrowser = False
-#     maxPages = 30
-# 
-#     # Add as parameters maxPages and MIN pages!
-#     
-#     loggingConfig = {"format":'%(asctime)s %(levelname)-8s %(message)s',
-#                      "datefmt":'%Y/%M/%D %H:%M:%S', "level": logging.INFO}
-# 
-#     try:
-#         opts, args = getopt.getopt(argv, "hvoa:l:c:b:s:m:x:", 
-#             ["help", "verbose", "open", "artist=", "log=", "cache=", 
-#              "beta=", "size=", "minimum=", "maximum="])
-#     except getopt.GetoptError, err:
-#         print >> sys.stderr, "Poorly specified options..." + str(err)
-#         usage()
-#         sys.exit(2)
-#     if len(opts) < 1:
-#         print ("not enough args specified, try again")
-#         usage()
-#         sys.exit(2)
-# 
-#     for opt, arg in opts:
-#         if opt in ("-h", "--help"):
-#             usage()
-#             sys.exit()
-#         elif opt in ("-l", "--log"):
-#             logPath = os.path.expanduser(arg)
-#             if not os.path.exists(logPath):
-#                 try:
-#                     os.mkdir(logPath)
-#                 except:
-#                     print "Could not create log directory"
-#                     usage()
-#                     return 183
-#             # Should add a log rotator here
-#             loggingConfig ={"format":'%(asctime)s %(levelname)-8s %(message)s',
-#                              "datefmt":'%Y/%M/%D %H:%M:%S',
-#                              "filename":os.path.join(logPath ,"friends.log"),
-#                              "filemode":"w", "level": logging.INFO}        
-#         elif opt in ("-v", "--verbose"):
-#             flag_verbose = True
-#             loggingConfig["level"] = logging.DEBUG
-#         elif opt in ("-m", "--minimum"):
-#             minimum = int(arg)
-#         elif opt in ("-x", "--maximum"):
-#             maxPages = int(arg)
-#         elif opt in ("-a", "--artist"):
-#             profileID = int(arg)
-#         elif opt in ("-b", "--beta"):
-#             beta = float(arg)
-#         elif opt in ("-s", "--size"):
-#             size = int(arg)
-#         elif opt in ("-c", "--cache"):
-#              cachePath = os.path.expanduser(arg)
-#         else:
-#             print "Poorly specified options..."
-#             usage()
-#             return 4
-# 
-#     logging.basicConfig(**loggingConfig)
-#     
-#     logging.info("Estimating closest artist of %d" % profileID)
-#     start = time.time()    
-#     closest = get_closest_friends(profileID, size, beta, minimum, maxPages, cachePath)
-#     logging.info("Elapsed time: %s" % (time.time() - start))
-#     print "%d closest of %d: %s" % (len(closest), profileID, closest)
-#     if openbrowser:
-#         open_closest_friends(closest)
-#     recommend_friends(closest, maxPages, cachePath)
-# 
-# if __name__ == "__main__":
-#     sys.exit(main())
-# 
-# 
-# ######### POI C'E' LA PARTE DI SEND!!
-# 
 # 
 # def send_rec_message(target_id, target_name, recName, recURL, seedName):
 #     '''Send a MySpace message recommending an artist to a target profile.'''
@@ -282,81 +182,6 @@ if __name__ == "__main__":
 #     fp.close()
 #     return result.find("confirmmain") > 0
 # 
-# 
-# def usage():
-#     print ("Usage: composer.py <options>")
-#     print ("   options:")
-#     print ("   -h [--help]     print this usage statement")
-#     print ("   -e [--email]    <value> specify e-mail to login to MySpace")
-#     print ("   -p [--pwd]      <value> specify password to login to MySpace")
-#     print ("   -i [--id]       <mySpaceUID> specify the recipient ID")
-#     print ("   -n [--name]     <value> specify the recipient name")
-#     print ("   -r [--recname]  <value> specify the recommended profile name")
-#     print ("   -u [--recurl]   <url> specify the recommended profile URL")
-#     print ("   -s [--seedname] <value> specify the seed profile name")
-#     return
-# 
-# 
-# def main(argv=None):
-#     if argv is None:
-#         argv = sys.argv[1:]
-#     
-#     email = account.email
-#     pwd = account.pwd
-#     target_id = 395541002 # goremix
-#     target_name = "goremix"
-#     recName = "Placebo"
-#     recURL = "www.myspace.com/placebo"
-#     seedName = "Muse"
-#     
-#     loggingConfig = {"format":'%(asctime)s %(levelname)-8s %(message)s',
-#                      "datefmt":'%Y/%M/%D %H:%M:%S', "level": logging.INFO}
-# 
-#     try:
-#         opts, args = getopt.getopt(argv, "e:p:i:n:r:u:s:", 
-#             ["email=", "pwd=", "id=", "name=", "recname=", "recurl=", 
-#              "seedname="])
-#     except getopt.GetoptError, err:
-#         print >> sys.stderr, "Poorly specified options..." + str(err)
-#         usage()
-#         sys.exit(2)
-# #    if len(opts) < 1:
-# #        print ("not enough args specified, try again")
-# #        usage()
-# #        sys.exit(2)
-#     for opt, arg in opts:
-#         if opt in ("-h", "--help"):
-#             usage()
-#             sys.exit()
-#         elif opt in ("-e", "--email"):
-#             email = str(arg)
-#         elif opt in ("-p", "--pwd"):
-#             pwd = str(arg)
-#         elif opt in ("-i", "--id"):
-#             target_id = int(arg)
-#         elif opt in ("-n", "--name"):
-#             target_name = str(arg)
-#         elif opt in ("-r", "--recname"):
-#             recName = str(arg)
-#         elif opt in ("-u", "--recurl"):
-#             recURL = str(arg)
-#         elif opt in ("-s", "--seedname"):
-#             seedName = str(arg)
-#         else:
-#             print "Poorly specified options..."
-#             usage()
-#             return 4
-# 
-#     logging.basicConfig(**loggingConfig)
-#     
-#     open_connection(email, pwd)
-#     result = send_rec_message(target_id, target_name, recName, recURL, seedName)
-#     print result
-# 
-#     # cambia per:
-#     # if open_connection():
-#     #   for each message:
-#     #       send_message():
 # 
 # 
 # # 179485614 piratas

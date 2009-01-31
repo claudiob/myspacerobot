@@ -1,5 +1,20 @@
 # 2009 - Claudio Baccigalupo
 
+# Examples:
+#
+# > python myspace/friends.py -m 1 270977337
+# Lists the friends of goremix
+#
+# > python myspace/top_friends.py -m 1 270977337
+# Lists the ranked top friends of goremix
+#
+# > python myspace/recommend.py -m 1 270977337
+# Returns recommendations among friends of goremix
+
+# 09.01.31 Added more functions to recommend related artists:
+#          - top_friends.py extracts the top friends of a MySpace profile
+#          - recommend.py connects top friends that do not know each other
+
 # 09.01.29 Separated different functions into independent modules:
 #          - friends.py scrape MySpace for the friends of a profile
 #          - compose.py send a message to a MySpace profile
