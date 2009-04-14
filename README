@@ -5,13 +5,13 @@
 # > python myspace/profile.py 270977337
 # Shows the profile of neurain
 #
-# > python myspace/friends.py -m 1 270977337
+# > python myspace/friends.py -m 1 -q 1 270977337
 # Lists the friends of neurain
 #
-# > python myspace/top_friends.py -m 1 270977337
+# > python myspace/top_friends.py -m 1 -q 1 270977337
 # Lists the ranked top friends of neurain
 #
-# > python myspace/recommend.py -m 1 270977337
+# > python myspace/recommend.py -m 1 -q 1 270977337
 # Returns recommendations among friends of neurain
 #
 # > python myspace/directory.py
