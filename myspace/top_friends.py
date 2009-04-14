@@ -20,6 +20,7 @@ from cache import *
 from threads import *
 from utils import *
 from friends import *
+from profile import *
 
 __author__ = "Claudio Baccigalupo"
            
@@ -39,40 +40,51 @@ def scrape_ranked_friends(profile, filters=None, cache=None):
     ffriends = call_threaded(load_friends, friends, queueSize=5, params=params)
     logging.debug("Retrieved %d friends of %s" % (len(friends), profile))
     ###### 3. Count friends and friends in common with id #####
-    friends_id = map_id(friends)
-    count_common = [intersect_size(friends_id, map_id(f)) for f in ffriends]
-    ranked = [{"profile": friend, "friends": len(ffriends[i]), "common": count_common[i]} \
-            for i, friend in enumerate(friends) if count_common[i] > 0]
+    count_common = [intersect_size(friends, f) for f in ffriends]
+    ranked = []
+    for i, friend in enumerate(friends):
+        if count_common[i] > 0:
+            friend.update({'friends':len(ffriends[i]), 'common':count_common[i]})
+            ranked.append(friend)
     ###### 4. Return friends ordered by max common friends, min friends #####
-    ranked.sort(key = lambda x:(-x["common"], x["friends"]))
+    logging.debug("Retrieved %d friends %s" % (len(ranked), ranked))
+    ranked.sort(key = lambda x:(-x['common'], x['friends']))
     return ranked
 
 def load_ranked_friends(profile, filters=None, cache=None):
     '''Retrieve ranked friends of profile either from cache or the web.'''
     ###### 1. Load from cache if available #####
-    cache_ext = "c" # Save ranked_friends files as "<ID>c.txt"
-    ranked = from_cache(profile["id"], cache, ext=cache_ext)
-    if ranked is not False:
+    cache_ext = "t" # Save ranked_friends files as "<ID>c.txt"
+    friends = from_cache(profile, cache, ext=cache_ext)
+    if friends is not False:
         logging.debug("Loaded %d ranked friends of %s (from cache)" % 
-            (len(ranked) if ranked is not None else 0, profile))
-        return ranked
+            (len(friends) if friends is not None else 0, profile))
+        return friends
     ###### 2. Load from web and store in cache otherwise #####
-    ranked = scrape_ranked_friends(profile, filters, cache)
-    if cache is not None:
-        to_cache(profile["id"], cache, ranked, ext=cache_ext)
-    return ranked
+    friends = scrape_ranked_friends(profile, filters, cache)
+    
+    # To save space, only store the ID
+    if friends is not None:
+        friends_id = [{'id': f['id'], 'friends': f['friends'], 'common': f['common']} for f in friends]
+        to_cache(profile, cache, friends_id, ext=cache_ext)
+#    to_cache(profile, cache, ranked, ext=cache_ext)
+    return friends
 
-def load_top_friends(profile, beta=0, size=1, filters=None, cache=None):
+
+def load_top_friends(profile, beta=0, size=1, min_common = 5, filters=None, cache=None):
     '''Return top friends of a profile according to ranking, size and beta.'''
     ###### 1. Load ranked friends of profile #####
     rank = load_ranked_friends(profile, filters, cache)
     if rank is None:
         logging.debug("Profile %s has no top friends" % profile)
         return None
-    top = [{"profile": friend["profile"], "weight": \
-        friend["common"]*1.0/pow(friend["friends"], beta)} for friend in rank]
-    top.sort(key = lambda x:(-x["weight"]))
-    return top[:size]
+    top_friends = []
+    for friend in rank:
+        if friend['common'] >= min_common:
+            top_friends.append({'id': friend['id'], 'weight': friend['common']*1.0/pow(friend['friends'], beta)})
+        # friend.update({'weight': friend['common']*1.0/pow(friend['friends'], beta)})      
+    top_friends.sort(key = lambda x:(-x['weight']))
+    return top_friends[:size]
     
 # ###########################
 # Test functions
@@ -112,6 +124,7 @@ def main(argv=None):
         print ("   -x [--max]   <int> specify the maximum friends' pages")
         print ("   -b [--beta]  <float> specify the popularity bias [0-1]")
         print ("   -s [--size]  <int> specify the number of top friends")
+        print ("   -q [--common]<int> specify the minimum common friends")
         print ("   -c [--cache] <path> set the path to the cache files")
         print ("   -l [--log]   <path> set the path to the log file")
         return
@@ -120,6 +133,7 @@ def main(argv=None):
     max_pages      = 30   # max 1200 friends
     beta           = 0.75
     size           = 10
+    min_common     = 5
     only_artists   = True
     profile_id     = None
     cache_path     = None
@@ -130,9 +144,9 @@ def main(argv=None):
     try:
         ###### 1. Retrieve opts and args #####
         try:
-            opts, args = getopt.getopt(argv[1:], "htdac:l:m:x:b:s:", 
+            opts, args = getopt.getopt(argv[1:], "htdac:l:m:x:b:s:q:", 
             ["help", "test", "debug", "all", "cache=", "log=", 
-             "min=", "max=", "beta=", "size="])
+             "min=", "max=", "beta=", "size=", "common=",])
         except getopt.error, msg:
              raise Usage(msg)
         ###### 2. Process opts ###### 
@@ -171,6 +185,8 @@ def main(argv=None):
                 beta = read_float(arg)
             elif opt in ("-s", "--size"):
                 size = read_int(arg)
+            elif opt in ("-q", "--common"):
+                min_common = read_int(arg)
         ###### 3. Process args ######
         if len(args) < 1:
             raise Usage("You did not specify a MySpaceUID")
@@ -189,13 +205,12 @@ def main(argv=None):
         profile = {"id": profile_id}
         filters = {"max_pages": max_pages, "min_pages": min_pages, \
                    "only_artists": only_artists}
-        top = load_top_friends(profile, beta, size, filters, cache_path)
+        top = load_top_friends(profile, beta, size, min_common, filters, cache_path)
         if top is not None:
-            print "The top friends of %s are:" % profile
+            print "The top friends of %s are:" % print_profile(profile, cache_path)
             for i, friend in enumerate(top):
-                print "%d) %s (%d): %.3f" % (i+1, friend["profile"]["name"], \
-                 friend["profile"]["id"], friend["weight"])
-        return top
+                print "%2d) %.3f: %s" % (i+1, friend['weight'], print_profile(friend, cache_path))
+        # return top
     ###### Manage errors ######
     except Usage, err:
         print >>sys.stderr, err.msg

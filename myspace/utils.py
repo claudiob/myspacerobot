@@ -15,7 +15,7 @@ __author__ = "Claudio Baccigalupo"
 def intersect_size(a, b):
     '''Return the intersection size of two lists, 0 if either is None.'''
     try:
-        return len(list(set(a) & set(b)))
+        return len(list(set([x['id'] for x in a]) & set([x['id'] for x in b])))
     except TypeError:
         return 0
 
@@ -25,6 +25,7 @@ def difference(a, b):
 
 def is_digit(char): 
     '''Return true if char is a digit.'''
+    # Could use: char.isdigit()
     return ord(char) in range(ord('0'),ord('9')+1)
 
 def flatten(l):

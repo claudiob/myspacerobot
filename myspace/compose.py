@@ -19,32 +19,46 @@ import unittest
 from account import *
 from paths import *
 from utils import *
+from time import sleep 
 
 __author__ = "Claudio Baccigalupo"
 
-def send_message(recipient_id, subject, body, email, password, open=False):
-    '''Send a MySpace message to recipient_id with given subject and body.'''
+def send_message(recipient_profile, subject, body, email, password, opened=False):
+    '''Send a MySpace message to recipient_profile with given subject and body.'''
     # 1. Open a connection to MySpace
-    if not open:
+    # recipient_profile = {'id': 270977337} Send to fake recipient (debug)
+    if not opened:
         open_connection(email, password)
     
     # 2. Open the Web page with the mail form
-    url = mail_message_URL(recipient_id)
+    url = mail_message_URL(recipient_profile)
     form_resp = ClientCookie.urlopen(url)
     forms = ClientForm.ParseResponse(form_resp, backwards_compat=False)
     form_resp.close()
     
     # 3. Fill the form, submit, and return the result
     mail_form = forms[1]
-    mail_form[mail_subject_field] = subject
-    mail_form[mail_body_field] = body
+    try:
+        mail_form[mail_subject_field] = subject
+        mail_form[mail_body_field] = body
+        # 20090409 - Additional commands for the To: field
+        mail_form.controls[2].readonly = False # assuming mail_to_field is controls[2]
+        mail_form[mail_to_field] = str(recipient_profile["id"])
+    except ClientForm.ControlNotFoundError, msg:
+        # For instance, if there is an AWAY message (e.g., id: 47749730)
+        logging.warning("Mail form not found in %s" % url)
+        return None
     send_resp = ClientCookie.urlopen(mail_form.click(id=mail_send_field))
     result = send_resp.read()
     send_resp.close()
+    #with open('exit.html', 'w') as f:
+    #    f.write(result)
     if result.find(mail_confirm_pattern) > 0:
+        sleep(3) # to avoid captcha
         return True
     if result.find(mail_captcha_pattern) > 0:
         logging.warning("Captcha required. Login manually once, then retry")
+        sys.exit(1)
     return False
     
 def open_connection(email, password):
@@ -67,8 +81,8 @@ def open_connection(email, password):
     login_resp = ClientCookie.urlopen(login_form.click())
     result = login_resp.read()
     login_resp.close()
-    with open("exit.html", 'w') as f:
-        f.write(result)
+#    with open("exit.html", 'w') as f:
+#        f.write(result)
 
     # 4. Check if login was successful
     try:        
@@ -110,8 +124,8 @@ def main(argv=None):
     try:
         ###### 1. Retrieve opts and args #####
         try:
-            opts, args = getopt.getopt(argv[1:], "he:p:s:b:", 
-                ["help", "email=", "pwd=", "subject=", "body="])
+            opts, args = getopt.getopt(argv[1:], "hde:p:s:b:l:", 
+                ["help", "debug", "email=", "pwd=", "subject=", "body=", "log="])
         except getopt.error, msg:
              raise Usage(msg)
         ###### 2. Process opts ###### 
@@ -154,7 +168,7 @@ def main(argv=None):
         if not open_connection(email, pwd):
             logging.error("Could not login %s to MySpace" % email)
             return 3
-        result = send_message(id, subject, body, email, pwd, open=True)
+        result = send_message(id, subject, body, email, pwd, opened=True)
         if not result:
             logging.error("Could not send message to %s" % id)
         else:
@@ -178,7 +192,7 @@ class TestCompose(unittest.TestCase):
 
     def testCompose(self):
         # Test that you can send a message to goremix
-        self.assertTrue(send_message(395541002, "testCompose", "testBody", \
+        self.assertTrue(send_message({'id' : 395541002}, "testCompose", "testBody", \
             MYSPACE_EMAIL, MYSPACE_PWD))
         # Add more tests if needed
 

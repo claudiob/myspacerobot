@@ -2,14 +2,30 @@
 
 # Examples:
 #
+# > python myspace/profile.py 270977337
+# Shows the profile of neurain
+#
 # > python myspace/friends.py -m 1 270977337
-# Lists the friends of goremix
+# Lists the friends of neurain
 #
 # > python myspace/top_friends.py -m 1 270977337
-# Lists the ranked top friends of goremix
+# Lists the ranked top friends of neurain
 #
 # > python myspace/recommend.py -m 1 270977337
-# Returns recommendations among friends of goremix
+# Returns recommendations among friends of neurain
+#
+# > python myspace/directory.py
+# Automatically runs 3-ties recommendations for every MySpace musician
+
+# 09.04.13 Completed directory to automatically recommend artist:
+#          - removed CAPTCHA thanks to the new "No more CAPTCHA" feature
+#          - added min_common number of friends to recommend an artist
+
+# 09.04.09 Added a directory function to complete the loop:
+#          - gets the directory of musicians from MySpace
+#          - runs the recommender on each of them
+#          Corrected code for new version of MySpace friends page
+#          Separated artist IDs from NAMEs in the cache files
 
 # 09.01.31 Added more functions to recommend related artists:
 #          - top_friends.py extracts the top friends of a MySpace profile

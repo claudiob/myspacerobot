@@ -32,7 +32,7 @@ __author__ = "Claudio Baccigalupo"
 
 def scrape_friends(profile, filters):
     '''Retrieve all the friends of id from the web that satisfy filters.'''
-    url = view_friends_URL(profile["id"])
+    url = view_friends_URL(profile)
     friends, count_pages, is_artist = parse_friends_URL(url, only_id=False)
     if count_pages is None:
         logging.debug("Error retrieving friends of %s" % profile)
@@ -50,7 +50,7 @@ def scrape_friends(profile, filters):
         friends = None
     else:
         pages = range(1, count_pages) # For each page after the first
-        URLs = [view_friends_URL(profile["id"], page) for page in pages]
+        URLs = [view_friends_URL(profile, page) for page in pages]
         more_friends = call_threaded(parse_friends_URL, URLs, queueSize=20)
         friends.extend(flatten(more_friends))
         logging.debug("Loaded %d friends of %s (from MySpace)" % 
@@ -61,15 +61,32 @@ def load_friends(profile, filters=None, cache=None):
     '''Retrieve all the friends of id either from cache or the web.'''
     ###### 1. Load from cache if available #####
     # sys.exit()
-    friends = from_cache(profile["id"], cache)
+    friends = from_cache(profile, cache)
     if friends is not False:
         # SLOW! logging.debug("Loaded %d friends of %s (from cache)" % 
         #    (len(friends) if friends is not None else 0, profile))
         return friends
     ###### 2. Load from web and store in cache otherwise #####
     friends = scrape_friends(profile, filters)
-    if cache is not None:
-        to_cache(profile["id"], cache, friends)
+    to_cache(profile, cache, friends)
+    return friends
+
+# New version: friends only store ID, profile stores the rest
+def load_friends(profile, filters=None, cache=None):
+    '''Retrieve all the friends of id either from cache or the web.'''
+    ###### 1. Load from cache if available #####
+    # sys.exit()
+    friends = from_cache(profile, cache, ext="f")
+    if friends is not False:
+        return friends
+    ###### 2. Load from web and store in cache otherwise #####
+    friends = scrape_friends(profile, filters)
+    if friends is not None:
+        for f in friends:
+            to_cache(f, cache, f, ext="p")
+        # To save space, only store the ID
+        friends_id = [{'id': f['id']} for f in friends]
+        to_cache(profile, cache, friends_id, ext="f")
     return friends
 
 # ###########################
