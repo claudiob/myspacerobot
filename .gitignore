@@ -1,4 +1,4 @@
-myspace/cache
-myspace/account.*
+cache
+account.*
 *.pyc
 
