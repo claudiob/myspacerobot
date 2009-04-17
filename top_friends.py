@@ -36,6 +36,7 @@ def scrape_ranked_friends(profile, filters=None, cache=None):
         return
     ###### 2. Load friends of each friend (threaded) #####
     logging.debug("Parsed %d friends of %s" % (len(friends), profile))
+    filters["force"] = False # friends of friend are subject to length restrictions
     params = {"filters": filters, "cache": cache}
     ffriends = call_threaded(load_friends, friends, queueSize=5, params=params)
     logging.debug("Retrieved %d friends of %s" % (len(friends), profile))
@@ -122,6 +123,7 @@ def main(argv=None):
         print ("   -a [--all]   include also not musician profiles")
         print ("   -m [--min]   <int> specify the minimum friends' pages")
         print ("   -x [--max]   <int> specify the maximum friends' pages")
+        print ("   -f [--force] call even with more/less than max/min friends")
         print ("   -b [--beta]  <float> specify the popularity bias [0-1]")
         print ("   -s [--size]  <int> specify the number of top friends")
         print ("   -q [--common]<int> specify the minimum common friends")
@@ -131,6 +133,7 @@ def main(argv=None):
 
     min_pages      = 2    # min 80 friends
     max_pages      = 30   # max 1200 friends
+    force          = True
     beta           = 0.75
     size           = 10
     min_common     = 5
@@ -144,8 +147,8 @@ def main(argv=None):
     try:
         ###### 1. Retrieve opts and args #####
         try:
-            opts, args = getopt.getopt(argv[1:], "htdac:l:m:x:b:s:q:", 
-            ["help", "test", "debug", "all", "cache=", "log=", 
+            opts, args = getopt.getopt(argv[1:], "htdafc:l:m:x:b:s:q:", 
+            ["help", "test", "debug", "all", "force", "cache=", "log=", 
              "min=", "max=", "beta=", "size=", "common=",])
         except getopt.error, msg:
              raise Usage(msg)
@@ -177,6 +180,8 @@ def main(argv=None):
                 logging_config["level"] = logging.DEBUG
             elif opt in ("-a", "--all"):
                 only_artists = False
+            elif opt in ("-f", "--force"):
+                force = True
             elif opt in ("-m", "--min"):
                 min_pages = read_int(arg)
             elif opt in ("-x", "--max"):
@@ -204,7 +209,7 @@ def main(argv=None):
         ###### 5. Retrieve friends ######
         profile = {"id": profile_id}
         filters = {"max_pages": max_pages, "min_pages": min_pages, \
-                   "only_artists": only_artists}
+                   "only_artists": only_artists, "force": force}
         top = load_top_friends(profile, beta, size, min_common, filters, cache_path)
         if top is not None:
             print "The top friends of %s are:" % print_profile(profile, cache_path)

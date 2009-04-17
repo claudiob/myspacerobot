@@ -225,7 +225,7 @@ def main(argv=None):
         filters = {"max_pages": max_pages, "min_pages": min_pages, \
                    "only_artists": only_artists, "size": size, \
                    "beta": beta, "max_messages": max_messages, \
-                   "email": email, "pwd": pwd}
+                   "email": email, "pwd": pwd, "min_common": min_common}
         if only_build:
             recs = build_recommendations(profile, beta, size, min_common, filters, cache_path)
             if recs is not None:

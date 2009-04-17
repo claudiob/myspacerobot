@@ -37,11 +37,11 @@ def scrape_friends(profile, filters):
     if count_pages is None:
         logging.debug("Error retrieving friends of %s" % profile)
         friends = None
-    elif filters and filters["min_pages"] and count_pages<filters["min_pages"]:
+    elif filters and not filters["force"] and filters["min_pages"] and count_pages<filters["min_pages"]:
         logging.debug("Skipped friends of %s (%d<%d pages)" % 
             (profile, count_pages, filters["min_pages"]))
         friends = None
-    elif filters and filters["max_pages"] and count_pages>filters["max_pages"]:
+    elif filters and not filters["force"] and filters["max_pages"] and count_pages>filters["max_pages"]:
         logging.debug("Skipped friends of %s (%d>%d pages)" % 
             (profile, count_pages, filters["max_pages"]))
         friends = None
@@ -57,21 +57,6 @@ def scrape_friends(profile, filters):
             (len(friends), profile))
     return friends
 
-def load_friends(profile, filters=None, cache=None):
-    '''Retrieve all the friends of id either from cache or the web.'''
-    ###### 1. Load from cache if available #####
-    # sys.exit()
-    friends = from_cache(profile, cache)
-    if friends is not False:
-        # SLOW! logging.debug("Loaded %d friends of %s (from cache)" % 
-        #    (len(friends) if friends is not None else 0, profile))
-        return friends
-    ###### 2. Load from web and store in cache otherwise #####
-    friends = scrape_friends(profile, filters)
-    to_cache(profile, cache, friends)
-    return friends
-
-# New version: friends only store ID, profile stores the rest
 def load_friends(profile, filters=None, cache=None):
     '''Retrieve all the friends of id either from cache or the web.'''
     ###### 1. Load from cache if available #####
